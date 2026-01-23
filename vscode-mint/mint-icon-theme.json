@@ -1,0 +1,10 @@
+{
+  "iconDefinitions": {
+    "_mint": {
+      "iconPath": "./icon.png"
+    }
+  },
+  "fileExtensions": {
+    "mint": "_mint"
+  }
+}

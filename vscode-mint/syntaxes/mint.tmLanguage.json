@@ -1,0 +1,119 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Mint",
+  "scopeName": "source.mint",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#booleans" },
+    { "include": "#numbers" },
+    { "include": "#operators" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.mint",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.line.quote.mint",
+          "match": "^\\s*\".*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.mint",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.mint",
+              "match": "\\\\(n|t|\"|\\\\)"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.mint",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.mint",
+              "match": "\\\\(n|t|'|\\\\)"
+            }
+          ]
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.mint",
+          "match": "\\b(program|init|initialization|endprogram)\\b"
+        },
+        {
+          "name": "keyword.declaration.mint",
+          "match": "\\b(var|type)\\b"
+        },
+        {
+          "name": "support.function.mint",
+          "match": "\\bwrite\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.mint",
+          "match": "\\b(int|string|bool|float|char)\\b"
+        }
+      ]
+    },
+    "booleans": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.mint",
+          "match": "\\b(true|false)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.mint",
+          "match": "\\b\\d+\\.\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.mint",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.arithmetic.mint",
+          "match": "(\\+|\\-|\\*|\\/|=)"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.terminator.mint",
+          "match": "\\."
+        },
+        {
+          "name": "punctuation.parenthesis.mint",
+          "match": "(\\(|\\))"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "mint-lang",
+  "displayName": "Mint Language",
+  "description": "Syntax highlighting for Mint (.mint)",
+  "version": "0.0.1",
+  "publisher": "paulooliveira",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "icon": "icon.png",
+  "contributes": {
+    "languages": [
+      {
+        "id": "mint",
+        "aliases": [
+          "Mint",
+          "mint"
+        ],
+        "extensions": [
+          ".mint"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "mint",
+        "scopeName": "source.mint",
+        "path": "./syntaxes/mint.tmLanguage.json"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "mint-icons",
+        "label": "Mint Icons",
+        "path": "./mint-icon-theme.json"
+      }
+    ]
+  }
+}
