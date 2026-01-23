@@ -49,5 +49,28 @@ python -m mintlang.cli examples/hello.mint
 
 O linter roda antes da execucao. Se houver erros (ex: variavel nao declarada ou tipo invalido), o programa nao executa.
 
+## Como a interpretacao funciona
+O Mint executa o codigo em etapas claras. Cada etapa tem um papel unico e explicitamente definido:
+
+1. Lexer: transforma o texto em tokens (palavras-chave, literais, operadores).
+2. Parser: organiza os tokens em uma AST (arvore de sintaxe abstrata).
+3. Linter: valida semantica e tipos antes da execucao.
+4. Interpreter: percorre a AST e executa o programa.
+
+Esse fluxo garante previsibilidade e facilita o entendimento do comportamento da linguagem.
+
+### Diagrama do fluxo
+```mermaid
+flowchart TD
+  A[Arquivo .mint] --> B[Lexer]
+  B --> C[Tokens]
+  C --> D[Parser]
+  D --> E[AST]
+  E --> F[Linter]
+  F -->|Sem erros| G[Interpreter]
+  F -->|Erros| H[Execucao bloqueada]
+  G --> I[Saida do programa]
+```
+
 ## Extensao do VS Code
 O projeto inclui uma extensao simples para destacar sintaxe. O pacote e mantido em `vscode-mint/`.
