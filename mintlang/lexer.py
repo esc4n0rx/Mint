@@ -22,6 +22,13 @@ KEYWORDS = {
     "false": TokenType.FALSE,
 
     "write": TokenType.WRITE,
+    "if": TokenType.IF,
+    "elseif": TokenType.ELSEIF,
+    "else": TokenType.ELSE,
+    "endif": TokenType.ENDIF,
+    "and": TokenType.AND,
+    "or": TokenType.OR,
+    "not": TokenType.NOT,
 }
 
 class Lexer:
@@ -88,6 +95,46 @@ class Lexer:
                 self.tokens.append(self._char(start_line, start_col))
                 continue
 
+            # operators (one or two chars)
+            if c == "=":
+                self._line_has_code = True
+                if self._peek_next() == "=":
+                    self._advance()
+                    self._advance()
+                    self.tokens.append(Token(TokenType.EQEQ, "==", start_line, start_col))
+                else:
+                    self._advance()
+                    self.tokens.append(Token(TokenType.EQUAL, "=", start_line, start_col))
+                continue
+            if c == "!":
+                self._line_has_code = True
+                if self._peek_next() == "=":
+                    self._advance()
+                    self._advance()
+                    self.tokens.append(Token(TokenType.NOTEQ, "!=", start_line, start_col))
+                    continue
+                raise LexerError(f"Caractere inesperado '{c}' em {start_line}:{start_col}")
+            if c == "<":
+                self._line_has_code = True
+                if self._peek_next() == "=":
+                    self._advance()
+                    self._advance()
+                    self.tokens.append(Token(TokenType.LTE, "<=", start_line, start_col))
+                else:
+                    self._advance()
+                    self.tokens.append(Token(TokenType.LT, "<", start_line, start_col))
+                continue
+            if c == ">":
+                self._line_has_code = True
+                if self._peek_next() == "=":
+                    self._advance()
+                    self._advance()
+                    self.tokens.append(Token(TokenType.GTE, ">=", start_line, start_col))
+                else:
+                    self._advance()
+                    self.tokens.append(Token(TokenType.GT, ">", start_line, start_col))
+                continue
+
             # single-char tokens
             single = {
                 "+": TokenType.PLUS,
@@ -96,7 +143,6 @@ class Lexer:
                 "/": TokenType.SLASH,
                 "(": TokenType.LPAREN,
                 ")": TokenType.RPAREN,
-                "=": TokenType.EQUAL,
                 ".": TokenType.DOT,
             }
             if c in single:

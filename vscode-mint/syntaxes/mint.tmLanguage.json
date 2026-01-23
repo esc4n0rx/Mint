@@ -55,7 +55,11 @@
       "patterns": [
         {
           "name": "keyword.control.mint",
-          "match": "\\b(program|init|initialization|endprogram)\\b"
+          "match": "\\b(program|init|initialization|endprogram|if|elseif|else|endif)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.mint",
+          "match": "\\b(and|or|not)\\b"
         },
         {
           "name": "keyword.declaration.mint",
@@ -99,7 +103,7 @@
       "patterns": [
         {
           "name": "keyword.operator.arithmetic.mint",
-          "match": "(\\+|\\-|\\*|\\/|=)"
+          "match": "(==|!=|<=|>=|<|>|\\+|\\-|\\*|\\/|=)"
         }
       ]
     },

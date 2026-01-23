@@ -62,6 +62,16 @@ class VarDeclStmt(Stmt):
     vartype: MintType
     initializer: Optional[Expr] = None
 
+@dataclass
+class IfBranch:
+    condition: Expr
+    body: List[Stmt]
+
+@dataclass
+class IfStmt(Stmt):
+    branches: List[IfBranch]
+    else_body: Optional[List[Stmt]] = None
+
 # -------------------------
 # Program structure
 # -------------------------

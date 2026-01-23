@@ -3,7 +3,7 @@ from typing import List, Optional
 from .tokens import Token, TokenType
 from .errors import ParserError
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, VarDeclStmt,
+    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, IfBranch,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, MintType
 )
 
@@ -12,9 +12,14 @@ class Parser:
     Gramática (MVP 2):
       program      -> "program" "init" "." decls "initialization" "." stmts "endprogram" "."
       decls        -> ( "var" IDENT "type" TYPE ( "=" expr )? "." )*
-      stmts        -> ( write_stmt )*
+      stmts        -> ( write_stmt | if_stmt )*
       write_stmt   -> "write" "(" expr ")" "."
-      expr         -> term
+      if_stmt      -> "if" expr "." stmts ( "elseif" expr "." stmts )* ( "else" "." stmts )? "endif" "."
+      expr         -> or_expr
+      or_expr      -> and_expr ( "or" and_expr )*
+      and_expr     -> not_expr ( "and" not_expr )*
+      not_expr     -> "not" not_expr | comparison
+      comparison   -> term (("==" | "!=" | "<" | ">" | "<=" | ">=") term)*
       term         -> factor (("+" | "-") factor)*
       factor       -> unary (("*" | "/") unary)*
       unary        -> (("+" | "-") unary) | primary
@@ -86,14 +91,74 @@ class Parser:
             self._consume(TokenType.DOT, "Faltou '.' no fim do write.")
             return WriteStmt(expr)
 
+        if self._match(TokenType.IF):
+            return self._if_stmt()
+
         t = self._peek()
         raise ParserError(f"Comando inesperado '{t.lexeme}' em {t.line}:{t.col}")
+
+    def _if_stmt(self) -> IfStmt:
+        condition = self._expression()
+        self._consume(TokenType.DOT, "Faltou '.' após condição do if.")
+        branches = [IfBranch(condition, self._block_until({TokenType.ELSEIF, TokenType.ELSE, TokenType.ENDIF}))]
+
+        while self._match(TokenType.ELSEIF):
+            cond = self._expression()
+            self._consume(TokenType.DOT, "Faltou '.' após condição do elseif.")
+            body = self._block_until({TokenType.ELSEIF, TokenType.ELSE, TokenType.ENDIF})
+            branches.append(IfBranch(cond, body))
+
+        else_body = None
+        if self._match(TokenType.ELSE):
+            self._consume(TokenType.DOT, "Faltou '.' após else.")
+            else_body = self._block_until({TokenType.ENDIF})
+
+        self._consume(TokenType.ENDIF, "Esperado 'endif'.")
+        self._consume(TokenType.DOT, "Faltou '.' após endif.")
+        return IfStmt(branches, else_body)
+
+    def _block_until(self, stop: set[TokenType]) -> List[Stmt]:
+        body: List[Stmt] = []
+        while not self._check_any(stop) and not self._check(TokenType.EOF):
+            body.append(self._statement())
+        return body
 
     # -------------------------
     # Expressions
     # -------------------------
     def _expression(self) -> Expr:
-        return self._term()
+        return self._or()
+
+    def _or(self) -> Expr:
+        expr = self._and()
+        while self._match(TokenType.OR):
+            op = self._previous().lexeme
+            right = self._and()
+            expr = Binary(expr, op, right)
+        return expr
+
+    def _and(self) -> Expr:
+        expr = self._not()
+        while self._match(TokenType.AND):
+            op = self._previous().lexeme
+            right = self._not()
+            expr = Binary(expr, op, right)
+        return expr
+
+    def _not(self) -> Expr:
+        if self._match(TokenType.NOT):
+            op = self._previous().lexeme
+            right = self._not()
+            return Unary(op, right)
+        return self._comparison()
+
+    def _comparison(self) -> Expr:
+        expr = self._term()
+        while self._match(TokenType.EQEQ, TokenType.NOTEQ, TokenType.LT, TokenType.GT, TokenType.LTE, TokenType.GTE):
+            op = self._previous().lexeme
+            right = self._term()
+            expr = Binary(expr, op, right)
+        return expr
 
     def _term(self) -> Expr:
         expr = self._factor()
@@ -166,6 +231,9 @@ class Parser:
 
     def _check(self, ttype: TokenType) -> bool:
         return self._peek().type == ttype
+
+    def _check_any(self, types: set[TokenType]) -> bool:
+        return self._peek().type in types
 
     def _advance(self) -> Token:
         if not self._check(TokenType.EOF):

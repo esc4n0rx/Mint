@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Any, Optional
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, VarDeclStmt,
+    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, MintType
 )
 from .errors import RuntimeMintError
@@ -47,8 +47,24 @@ class Interpreter:
             val = self._eval(stmt.expr)
             print(self._format_value(val))
             return
+        if isinstance(stmt, IfStmt):
+            self._exec_if(stmt)
+            return
 
         raise RuntimeMintError(f"Stmt não suportado: {type(stmt).__name__}")
+
+    def _exec_if(self, stmt: IfStmt) -> None:
+        for branch in stmt.branches:
+            cond = self._eval(branch.condition)
+            if not isinstance(cond, bool):
+                raise RuntimeMintError("Condição do if deve ser bool.")
+            if cond:
+                for inner in branch.body:
+                    self._exec_stmt(inner)
+                return
+        if stmt.else_body is not None:
+            for inner in stmt.else_body:
+                self._exec_stmt(inner)
 
     def _eval(self, expr: Expr) -> Any:
         if isinstance(expr, IntLit):
@@ -73,6 +89,10 @@ class Interpreter:
 
         if isinstance(expr, Unary):
             v = self._eval(expr.expr)
+            if expr.op == "not":
+                if not isinstance(v, bool):
+                    raise RuntimeMintError("Operador NOT requer bool.")
+                return not v
             if not isinstance(v, (int, float)):
                 raise RuntimeMintError(f"Operador unário '{expr.op}' requer int ou float.")
             if expr.op == "-":
@@ -83,7 +103,13 @@ class Interpreter:
 
         if isinstance(expr, Binary):
             left = self._eval(expr.left)
+            if expr.op in ("and", "or"):
+                return self._eval_logical(expr.op, left, expr.right)
+
             right = self._eval(expr.right)
+
+            if expr.op in ("==", "!=", "<", ">", "<=", ">="):
+                return self._eval_comparison(expr.op, left, right)
 
             if not isinstance(left, (int, float)) or not isinstance(right, (int, float)):
                 raise RuntimeMintError(f"Operação '{expr.op}' requer int ou float em ambos os lados.")
@@ -104,6 +130,67 @@ class Interpreter:
             raise RuntimeMintError(f"Operador inválido: {expr.op}")
 
         raise RuntimeMintError(f"Expr não suportada: {type(expr).__name__}")
+
+    def _eval_logical(self, op: str, left: Any, right_expr: Expr) -> bool:
+        if not isinstance(left, bool):
+            raise RuntimeMintError(f"Operador {op.upper()} requer bool em ambos os lados.")
+        if op == "and":
+            if not left:
+                return False
+            right_val = self._eval(right_expr)
+            if not isinstance(right_val, bool):
+                raise RuntimeMintError(f"Operador AND requer bool em ambos os lados.")
+            return right_val
+        if op == "or":
+            if left:
+                return True
+            right_val = self._eval(right_expr)
+            if not isinstance(right_val, bool):
+                raise RuntimeMintError(f"Operador OR requer bool em ambos os lados.")
+            return right_val
+        raise RuntimeMintError(f"Operador lógico inválido: {op}")
+
+    def _eval_comparison(self, op: str, left: Any, right: Any) -> bool:
+        if isinstance(left, bool) or isinstance(right, bool):
+            if not (isinstance(left, bool) and isinstance(right, bool)):
+                raise RuntimeMintError(f"Comparação entre tipos incompatíveis: {type(left).__name__} {op} {type(right).__name__}.")
+            if op not in ("==", "!="):
+                raise RuntimeMintError(f"Comparação '{op}' não suportada para bool.")
+            return left == right if op == "==" else left != right
+
+        if isinstance(left, (int, float)) or isinstance(right, (int, float)):
+            if not (isinstance(left, (int, float)) and isinstance(right, (int, float))):
+                raise RuntimeMintError(f"Comparação entre tipos incompatíveis: {type(left).__name__} {op} {type(right).__name__}.")
+            if op == "==":
+                return left == right
+            if op == "!=":
+                return left != right
+            if op == "<":
+                return left < right
+            if op == ">":
+                return left > right
+            if op == "<=":
+                return left <= right
+            if op == ">=":
+                return left >= right
+            raise RuntimeMintError(f"Operador inválido: {op}")
+
+        if isinstance(left, str) and isinstance(right, str):
+            if op == "==":
+                return left == right
+            if op == "!=":
+                return left != right
+            if op == "<":
+                return left < right
+            if op == ">":
+                return left > right
+            if op == "<=":
+                return left <= right
+            if op == ">=":
+                return left >= right
+            raise RuntimeMintError(f"Operador inválido: {op}")
+
+        raise RuntimeMintError(f"Comparação entre tipos incompatíveis: {type(left).__name__} {op} {type(right).__name__}.")
 
     def _ensure_type(self, name: str, t: MintType, val: Any) -> None:
         if t == "int" and not isinstance(val, int):

@@ -10,6 +10,12 @@ class TokenType(Enum):
     LPAREN = auto()
     RPAREN = auto()
     EQUAL = auto()
+    EQEQ = auto()
+    NOTEQ = auto()
+    LT = auto()
+    GT = auto()
+    LTE = auto()
+    GTE = auto()
     DOT = auto()
 
     # Literals / identifiers
@@ -38,6 +44,13 @@ class TokenType(Enum):
     FALSE = auto()
 
     WRITE = auto()
+    IF = auto()
+    ELSEIF = auto()
+    ELSE = auto()
+    ENDIF = auto()
+    AND = auto()
+    OR = auto()
+    NOT = auto()
 
     # Special
     EOF = auto()

@@ -111,3 +111,34 @@ Adicionados novos tipos e literais:
 * Tipo `char` com literal em aspas simples e validação de 1 caractere no linter
 * Lexer, parser, AST, linter e interpreter atualizados
 * Syntax highlighting ajustado na extensão do VS Code
+
+---
+
+## Feature: Estruturas condicionais (IF/ELSEIF/ELSE/ENDIF)
+
+**Data:** 2026-01-22
+
+### Resumo
+
+Adicionadas estruturas condicionais ao Mint com:
+
+* Novas keywords e parsing de blocos `if/elseif/else/endif`
+* Operadores de comparação e regras de precedência
+* Linter validando tipo booleano da condição e compatibilidade de tipos
+* Interpreter executando apenas o primeiro bloco verdadeiro
+* Syntax highlighting atualizado na extensão do VS Code
+
+---
+
+## Feature: Operadores lógicos AND/OR/NOT
+
+**Data:** 2026-01-22
+
+### Resumo
+
+Adicionados operadores lógicos com precedência e short-circuit:
+
+* Tokens e parsing para `and`, `or`, `not` com precedência correta
+* Linter validando uso estrito de bool e mensagens educativas
+* Interpreter com avaliação curta (short-circuit) em `and`/`or`
+* Syntax highlighting e exemplos `.mint` atualizados

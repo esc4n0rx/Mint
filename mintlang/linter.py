@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Union, Tuple
 from .ast_nodes import (
-    Program, VarDeclStmt, WriteStmt, Stmt,
+    Program, VarDeclStmt, WriteStmt, IfStmt, Stmt,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, MintType
 )
 from .errors import LintError
@@ -39,12 +39,27 @@ class Linter:
 
         # body
         for st in program.body:
-            if isinstance(st, WriteStmt):
-                self._infer_type(st.expr, sym, issues)
-            else:
-                issues.append(LintIssue(f"Statement não suportado no linter: {type(st).__name__}"))
+            self._lint_stmt(st, sym, issues)
 
         return issues
+
+    def _lint_stmt(self, stmt: Stmt, sym: Dict[str, MintType], issues: List[LintIssue]) -> None:
+        if isinstance(stmt, WriteStmt):
+            self._infer_type(stmt.expr, sym, issues)
+            return
+        if isinstance(stmt, IfStmt):
+            for branch in stmt.branches:
+                cond_type = self._infer_type(branch.condition, sym, issues)
+                if cond_type is not None and cond_type != "bool":
+                    issues.append(LintIssue("Condição do if deve ser bool."))
+                for inner in branch.body:
+                    self._lint_stmt(inner, sym, issues)
+            if stmt.else_body is not None:
+                for inner in stmt.else_body:
+                    self._lint_stmt(inner, sym, issues)
+            return
+
+        issues.append(LintIssue(f"Statement não suportado no linter: {type(stmt).__name__}"))
 
     def _infer_type(self, expr: Expr, sym: Dict[str, MintType], issues: List[LintIssue]) -> Optional[MintType]:
         if isinstance(expr, IntLit):
@@ -66,6 +81,12 @@ class Linter:
             return t
         if isinstance(expr, Unary):
             t = self._infer_type(expr.expr, sym, issues)
+            if expr.op == "not":
+                if t is not None and t != "bool":
+                    issues.append(LintIssue(
+                        f"Operador NOT requer bool, mas recebeu {t}."
+                    ))
+                return "bool" if t is not None else None
             if t is not None and t not in ("int", "float"):
                 issues.append(LintIssue(
                     f"Operador unário '{expr.op}' usado em tipo {t} (esperado int ou float)."
@@ -74,6 +95,34 @@ class Linter:
         if isinstance(expr, Binary):
             lt = self._infer_type(expr.left, sym, issues)
             rt = self._infer_type(expr.right, sym, issues)
+            if expr.op in ("and", "or"):
+                if lt is None or rt is None:
+                    return None
+                if lt != "bool" or rt != "bool":
+                    issues.append(LintIssue(
+                        f"Operador {expr.op.upper()} requer bool em ambos os lados, mas recebeu {lt} e {rt}."
+                    ))
+                    return None
+                return "bool"
+            if expr.op in ("==", "!=", "<", ">", "<=", ">="):
+                if lt is None or rt is None:
+                    return None
+                if lt in ("int", "float") and rt in ("int", "float"):
+                    return "bool"
+                if lt == "bool" and rt == "bool":
+                    if expr.op not in ("==", "!="):
+                        issues.append(LintIssue(
+                            f"Comparação '{expr.op}' não suportada para bool."
+                        ))
+                        return None
+                    return "bool"
+                if lt in ("string", "char") and rt in ("string", "char"):
+                    return "bool"
+                issues.append(LintIssue(
+                    f"Comparação entre tipos incompatíveis: {lt} {expr.op} {rt}."
+                ))
+                return None
+
             if lt is not None and lt not in ("int", "float"):
                 issues.append(LintIssue(
                     f"Operação '{expr.op}' com lado esquerdo {lt} (esperado int ou float)."
