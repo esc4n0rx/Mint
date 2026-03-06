@@ -23,12 +23,48 @@ Mint é uma linguagem interpretada em Python com foco educacional, tipagem forte
 ## Estrutura do repositório
 - `mintlang/`: lexer, parser, AST, linter e interpreter
 - `examples/`: programas de exemplo
+- `install/`: instaladores de launcher para Windows/Linux/macOS
+- `run.sh`, `run.bat`, `run.command`: fallback para rodar sem PATH
 - `vscode-mint/`: extensão de highlight para VS Code
 - `task.md`: histórico das features implementadas
 
-## Executar
+## Instalação dos executáveis
+
+### Linux
 ```bash
-python -m mintlang.cli examples/hello.mint
+./install/install_linux.sh
+```
+
+### macOS
+```bash
+./install/install_macos.sh
+```
+
+### Windows
+```bat
+install\install_windows.bat
+```
+
+Os instaladores:
+- validam se Python 3.10+ está instalado;
+- criam um launcher `mint` no PATH do usuário;
+- permitem usar comandos como `mint -file caminho\arquivo.mint`.
+
+## Execução
+
+### Pelo launcher instalado
+```bash
+mint -file examples/hello.mint
+```
+
+### Sem PATH (fallback)
+```bash
+./run.sh -file examples/hello.mint
+```
+
+## Criar arquivo novo por CLI
+```bash
+mint -create HelloWorld.mint
 ```
 
 ## Novos exemplos
@@ -37,3 +73,4 @@ python -m mintlang.cli examples/hello.mint
 - `examples/input_invalid_target_expression.mint`
 - `examples/input_unknown_var.mint`
 - `examples/move_type_error.mint`
+- `examples/HelloWorld.mint`
