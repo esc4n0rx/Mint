@@ -38,3 +38,16 @@ Registro consolidado das funcionalidades implementadas.
   - Compatibilidade de tipos igual à atribuição (`int -> float` permitido, demais incompatíveis).
 - Highlighter do VS Code atualizado para `input`, `move`, `to`.
 - Novos exemplos em `examples/` cobrindo casos válidos e inválidos.
+
+## 2026-03-06 — CLI de distribuição e instaladores multiplataforma
+- CLI agora suporta:
+  - `-file/--file` para executar arquivo `.mint`.
+  - `-create/--create` para gerar template inicial `.mint`.
+  - compatibilidade com modo legado por argumento posicional.
+- Instaladores adicionados:
+  - `install/install_linux.sh`
+  - `install/install_macos.sh`
+  - `install/install_windows.bat`
+- Scripts de fallback adicionados para execução sem PATH:
+  - `run.sh`, `run.command`, `run.bat`
+- Exemplo novo: `examples/HelloWorld.mint`.
