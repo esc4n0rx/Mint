@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Union, Tuple
 from .ast_nodes import (
-    Program, VarDeclStmt, WriteStmt, IfStmt, AssignStmt, WhileStmt, Stmt,
+    Program, VarDeclStmt, WriteStmt, IfStmt, AssignStmt, WhileStmt, InputStmt, MoveStmt, Stmt,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, MintType
 )
 from .errors import LintError
@@ -68,6 +68,27 @@ class Linter:
             if expr_type is not None and not self._is_assignment_compatible(var_type, expr_type):
                 issues.append(LintIssue(
                     f"Incompatibilidade na atribuição: '{stmt.name}' é {var_type} mas recebeu {expr_type}."
+                ))
+            return
+        if isinstance(stmt, InputStmt):
+            if not isinstance(stmt.target, VarRef):
+                issues.append(LintIssue("input só aceita variável como alvo."))
+                self._infer_type(stmt.target, sym, issues)
+                return
+            var_type = sym.get(stmt.target.name)
+            if var_type is None:
+                issues.append(LintIssue(f"Input para variável não declarada: '{stmt.target.name}'."))
+            return
+        if isinstance(stmt, MoveStmt):
+            var_type = sym.get(stmt.target)
+            if var_type is None:
+                issues.append(LintIssue(f"Move para variável não declarada: '{stmt.target}'."))
+                self._infer_type(stmt.source, sym, issues)
+                return
+            source_type = self._infer_type(stmt.source, sym, issues)
+            if source_type is not None and not self._is_assignment_compatible(var_type, source_type):
+                issues.append(LintIssue(
+                    f"Incompatibilidade no move: '{stmt.target}' é {var_type} mas recebeu {source_type}."
                 ))
             return
         if isinstance(stmt, WhileStmt):

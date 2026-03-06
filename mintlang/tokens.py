@@ -44,6 +44,9 @@ class TokenType(Enum):
     FALSE = auto()
 
     WRITE = auto()
+    INPUT = auto()
+    MOVE = auto()
+    TO = auto()
     IF = auto()
     ELSEIF = auto()
     ELSE = auto()

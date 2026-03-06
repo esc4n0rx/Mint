@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Any, Optional
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, AssignStmt, WhileStmt,
+    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, AssignStmt, WhileStmt, InputStmt, MoveStmt,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, MintType
 )
 from .errors import RuntimeMintError
@@ -53,6 +53,12 @@ class Interpreter:
         if isinstance(stmt, AssignStmt):
             self._exec_assign(stmt)
             return
+        if isinstance(stmt, InputStmt):
+            self._exec_input(stmt)
+            return
+        if isinstance(stmt, MoveStmt):
+            self._exec_move(stmt)
+            return
         if isinstance(stmt, WhileStmt):
             self._exec_while(stmt)
             return
@@ -78,6 +84,26 @@ class Interpreter:
         val = self._eval(stmt.expr)
         coerced_val = self._ensure_type(stmt.name, self.types[stmt.name], val)
         self.env[stmt.name] = coerced_val
+
+    def _exec_input(self, stmt: InputStmt) -> None:
+        if not isinstance(stmt.target, VarRef):
+            raise RuntimeMintError("input só aceita variável como alvo.")
+
+        name = stmt.target.name
+        if name not in self.types:
+            raise RuntimeMintError(f"Variável '{name}' não declarada.")
+
+        raw = input()
+        value = self._parse_input_value(name, self.types[name], raw)
+        self.env[name] = value
+
+    def _exec_move(self, stmt: MoveStmt) -> None:
+        if stmt.target not in self.types:
+            raise RuntimeMintError(f"Variável '{stmt.target}' não declarada.")
+
+        value = self._eval(stmt.source)
+        coerced_value = self._ensure_type(stmt.target, self.types[stmt.target], value)
+        self.env[stmt.target] = coerced_value
 
     def _exec_while(self, stmt: WhileStmt) -> None:
         while True:
@@ -233,6 +259,31 @@ class Interpreter:
             if len(val) != 1:
                 raise RuntimeMintError(f"'{name}' é char, mas recebeu string com {len(val)} caracteres.")
         return val
+
+    def _parse_input_value(self, name: str, t: MintType, raw: str) -> Any:
+        if t == "string":
+            return raw
+        if t == "int":
+            try:
+                return int(raw)
+            except ValueError as e:
+                raise RuntimeMintError(f"Input inválido para variável '{name}': esperado int.") from e
+        if t == "float":
+            try:
+                return float(raw)
+            except ValueError as e:
+                raise RuntimeMintError(f"Input inválido para variável '{name}': esperado float.") from e
+        if t == "bool":
+            if raw == "true":
+                return True
+            if raw == "false":
+                return False
+            raise RuntimeMintError(f"Input inválido para variável '{name}': esperado bool (true/false).")
+        if t == "char":
+            if len(raw) != 1:
+                raise RuntimeMintError(f"Input inválido para variável '{name}': esperado char (1 caractere).")
+            return raw
+        raise RuntimeMintError(f"Tipo inválido para input em '{name}': {t}.")
 
     def _format_value(self, val: Any) -> str:
         if isinstance(val, bool):

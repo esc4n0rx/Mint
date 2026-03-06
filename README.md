@@ -19,6 +19,8 @@ Mint e uma linguagem interpretada em Python com foco educacional. O projeto prio
 - Comparacoes com validacao de tipos
 - Condicionais `if/elseif/else/endif`
 - Atribuicao com `=` (respeitando tipo da variavel)
+- Leitura de entrada com `input(var)` com conversao tipada
+- Comando `move ... to ...` como atribuicao semantica
 - Repeticao com `while/endwhile`
 - Operadores logicos `and/or/not` com short-circuit
 - Linter estatico antes da execucao

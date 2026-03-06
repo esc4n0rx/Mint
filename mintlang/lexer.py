@@ -22,6 +22,9 @@ KEYWORDS = {
     "false": TokenType.FALSE,
 
     "write": TokenType.WRITE,
+    "input": TokenType.INPUT,
+    "move": TokenType.MOVE,
+    "to": TokenType.TO,
     "if": TokenType.IF,
     "elseif": TokenType.ELSEIF,
     "else": TokenType.ELSE,

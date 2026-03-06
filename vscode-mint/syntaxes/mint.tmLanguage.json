@@ -83,7 +83,7 @@
         },
         {
           "name": "support.function.mint",
-          "match": "\\bwrite\\b"
+          "match": "\\b(write|input|move|to)\\b"
         }
       ]
     },

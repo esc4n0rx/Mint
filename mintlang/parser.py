@@ -3,7 +3,7 @@ from typing import List, Optional
 from .tokens import Token, TokenType
 from .errors import ParserError
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, WhileStmt,
+    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, WhileStmt, InputStmt, MoveStmt,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, MintType
 )
 
@@ -12,8 +12,10 @@ class Parser:
     Gramática (MVP 2):
       program      -> "program" "init" "." decls "initialization" "." stmts "endprogram" "."
       decls        -> ( "var" IDENT "type" TYPE ( "=" expr )? "." )*
-      stmts        -> ( write_stmt | if_stmt | assign_stmt | while_stmt )*
+      stmts        -> ( write_stmt | input_stmt | move_stmt | if_stmt | assign_stmt | while_stmt )*
       write_stmt   -> "write" "(" expr ")" "."
+      input_stmt   -> "input" "(" expr ")" "."
+      move_stmt    -> "move" expr "to" IDENT "."
       if_stmt      -> "if" expr "." stmts ( "elseif" expr "." stmts )* ( "else" "." stmts )? "endif" "."
       assign_stmt  -> IDENT "=" expr "."
       while_stmt   -> "while" expr "." stmts "endwhile" "."
@@ -92,6 +94,20 @@ class Parser:
             self._consume(TokenType.RPAREN, "Esperado ')' após expressão do write.")
             self._consume(TokenType.DOT, "Faltou '.' no fim do write.")
             return WriteStmt(expr)
+
+        if self._match(TokenType.INPUT):
+            self._consume(TokenType.LPAREN, "Esperado '(' após input.")
+            target = self._expression()
+            self._consume(TokenType.RPAREN, "Esperado ')' após alvo do input.")
+            self._consume(TokenType.DOT, "Faltou '.' no fim do input.")
+            return InputStmt(target)
+
+        if self._match(TokenType.MOVE):
+            source = self._expression()
+            self._consume(TokenType.TO, "Esperado 'to' no comando move.")
+            target = self._consume(TokenType.IDENT, "Esperado variável destino no move.").lexeme
+            self._consume(TokenType.DOT, "Faltou '.' no fim do move.")
+            return MoveStmt(source=source, target=target)
 
         if self._match(TokenType.IF):
             return self._if_stmt()
