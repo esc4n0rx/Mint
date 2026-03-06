@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Optional, Literal, Union
+from typing import List, Optional, Literal
 
 MintType = Literal["int", "string", "bool", "float", "char"]
 
@@ -45,6 +45,11 @@ class Unary(Expr):
     op: str
     expr: Expr
 
+@dataclass
+class CallExpr(Expr):
+    name: str
+    args: List[Expr]
+
 # -------------------------
 # Statements
 # -------------------------
@@ -82,6 +87,29 @@ class WhileStmt(Stmt):
     condition: Expr
     body: List[Stmt]
 
+@dataclass
+class ReturnStmt(Stmt):
+    expr: Expr
+
+
+@dataclass
+class CallStmt(Stmt):
+    call: CallExpr
+
+
+@dataclass
+class FuncParam:
+    name: str
+    param_type: MintType
+
+
+@dataclass
+class FuncDecl:
+    name: str
+    params: List[FuncParam]
+    return_type: Optional[MintType]
+    body: List[Stmt]
+
 # -------------------------
 # Program structure
 # -------------------------
@@ -89,3 +117,4 @@ class WhileStmt(Stmt):
 class Program:
     decls: List[VarDeclStmt]
     body: List[Stmt]
+    funcs: List[FuncDecl]

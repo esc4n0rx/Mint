@@ -3,20 +3,25 @@ from typing import List, Optional
 from .tokens import Token, TokenType
 from .errors import ParserError
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, WhileStmt,
-    Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, MintType
+    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, WhileStmt, ReturnStmt, CallStmt,
+    FuncDecl, FuncParam,
+    Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
 
 class Parser:
     """
-    Gramática (MVP 2):
-      program      -> "program" "init" "." decls "initialization" "." stmts "endprogram" "."
+    Gramática (MVP):
+      program      -> "program" "init" "." decls "initialization" "." stmts "endprogram" "." func_decls*
       decls        -> ( "var" IDENT "type" TYPE ( "=" expr )? "." )*
-      stmts        -> ( write_stmt | if_stmt | assign_stmt | while_stmt )*
+      stmts        -> ( write_stmt | if_stmt | assign_stmt | while_stmt | return_stmt | var_decl_stmt )*
+      func_decls   -> "func" IDENT "(" params? ")" ("returns" TYPE)? "." stmts "endfunc" "."
+      params       -> param ("," param)*
+      param        -> IDENT "type" TYPE
       write_stmt   -> "write" "(" expr ")" "."
       if_stmt      -> "if" expr "." stmts ( "elseif" expr "." stmts )* ( "else" "." stmts )? "endif" "."
       assign_stmt  -> IDENT "=" expr "."
       while_stmt   -> "while" expr "." stmts "endwhile" "."
+      return_stmt  -> "return" expr "."
       expr         -> or_expr
       or_expr      -> and_expr ( "or" and_expr )*
       and_expr     -> not_expr ( "and" not_expr )*
@@ -25,7 +30,8 @@ class Parser:
       term         -> factor (("+" | "-") factor)*
       factor       -> unary (("*" | "/") unary)*
       unary        -> (("+" | "-") unary) | primary
-      primary      -> NUMBER | FLOAT | STRING | CHAR | TRUE | FALSE | IDENT | "(" expr ")"
+      primary      -> NUMBER | FLOAT | STRING | CHAR | TRUE | FALSE | IDENT ("(" args? ")")? | "(" expr ")"
+      args         -> expr ("," expr)*
       TYPE         -> "int" | "string" | "bool" | "float" | "char"
     """
     def __init__(self, tokens: List[Token]):
@@ -44,19 +50,49 @@ class Parser:
         self._consume(TokenType.INITIALIZATION, "Esperado 'initialization'.")
         self._consume(TokenType.DOT, "Esperado '.' após 'initialization'.")
 
-        body: List[Stmt] = []
-        while not self._check(TokenType.ENDPROGRAM) and not self._check(TokenType.EOF):
-            body.append(self._statement())
+        body = self._block_until({TokenType.ENDPROGRAM})
 
         self._consume(TokenType.ENDPROGRAM, "Esperado 'endprogram'.")
         self._consume(TokenType.DOT, "Esperado '.' após 'endprogram'.")
 
-        # opcional: aceitar apenas EOF depois
+        funcs: List[FuncDecl] = []
+        while self._check(TokenType.FUNC):
+            funcs.append(self._func_decl())
+
         if not self._check(TokenType.EOF):
             t = self._peek()
-            raise ParserError(f"Texto extra após endprogram em {t.line}:{t.col}")
+            raise ParserError(f"Texto extra após fim do programa em {t.line}:{t.col}")
 
-        return Program(decls=decls, body=body)
+        return Program(decls=decls, body=body, funcs=funcs)
+
+    def _func_decl(self) -> FuncDecl:
+        self._consume(TokenType.FUNC, "Esperado 'FUNC'.")
+        name = self._consume(TokenType.IDENT, "Esperado nome da função.").lexeme
+        self._consume(TokenType.LPAREN, "Esperado '(' após nome da função.")
+
+        params: List[FuncParam] = []
+        if not self._check(TokenType.RPAREN):
+            params.append(self._func_param())
+            while self._match(TokenType.COMMA):
+                params.append(self._func_param())
+
+        self._consume(TokenType.RPAREN, "Esperado ')' após parâmetros.")
+
+        return_type: Optional[MintType] = None
+        if self._match(TokenType.RETURNS):
+            return_type = self._parse_type()
+
+        self._consume(TokenType.DOT, "Faltou '.' após cabeçalho da função.")
+        body = self._block_until({TokenType.ENDFUNC})
+        self._consume(TokenType.ENDFUNC, "Esperado 'ENDFUNC'.")
+        self._consume(TokenType.DOT, "Faltou '.' após ENDFUNC.")
+        return FuncDecl(name=name, params=params, return_type=return_type, body=body)
+
+    def _func_param(self) -> FuncParam:
+        name = self._consume(TokenType.IDENT, "Esperado nome do parâmetro.").lexeme
+        self._consume(TokenType.TYPE, "Esperado 'type' após nome do parâmetro.")
+        param_type = self._parse_type()
+        return FuncParam(name=name, param_type=param_type)
 
     def _vardecl(self) -> VarDeclStmt:
         self._consume(TokenType.VAR, "Esperado 'var'.")
@@ -86,6 +122,9 @@ class Parser:
         raise ParserError(f"Tipo inválido '{t.lexeme}' em {t.line}:{t.col}")
 
     def _statement(self) -> Stmt:
+        if self._check(TokenType.VAR):
+            return self._vardecl()
+
         if self._match(TokenType.WRITE):
             self._consume(TokenType.LPAREN, "Esperado '(' após write.")
             expr = self._expression()
@@ -99,8 +138,18 @@ class Parser:
         if self._match(TokenType.WHILE):
             return self._while_stmt()
 
+        if self._match(TokenType.RETURN):
+            expr = self._expression()
+            self._consume(TokenType.DOT, "Faltou '.' no fim do return.")
+            return ReturnStmt(expr)
+
         if self._check(TokenType.IDENT) and self._check_next(TokenType.EQUAL):
             return self._assign_stmt()
+
+        if self._check(TokenType.IDENT) and self._check_next(TokenType.LPAREN):
+            call_expr = self._call_expr()
+            self._consume(TokenType.DOT, "Faltou '.' no fim da chamada de função.")
+            return CallStmt(call=call_expr)
 
         t = self._peek()
         raise ParserError(f"Comando inesperado '{t.lexeme}' em {t.line}:{t.col}")
@@ -132,6 +181,17 @@ class Parser:
         self._consume(TokenType.ENDWHILE, "Esperado 'endwhile'.")
         self._consume(TokenType.DOT, "Faltou '.' após endwhile.")
         return WhileStmt(condition, body)
+
+    def _call_expr(self) -> CallExpr:
+        name = self._consume(TokenType.IDENT, "Esperado nome da função.").lexeme
+        self._consume(TokenType.LPAREN, "Esperado '(' após nome da função.")
+        args: List[Expr] = []
+        if not self._check(TokenType.RPAREN):
+            args.append(self._expression())
+            while self._match(TokenType.COMMA):
+                args.append(self._expression())
+        self._consume(TokenType.RPAREN, "Esperado ')' após argumentos da chamada.")
+        return CallExpr(name=name, args=args)
 
     def _assign_stmt(self) -> AssignStmt:
         name = self._consume(TokenType.IDENT, "Esperado nome da variável.").lexeme
@@ -226,7 +286,16 @@ class Parser:
             return BoolLit(False)
 
         if self._match(TokenType.IDENT):
-            return VarRef(self._previous().lexeme)
+            name = self._previous().lexeme
+            if self._match(TokenType.LPAREN):
+                args: List[Expr] = []
+                if not self._check(TokenType.RPAREN):
+                    args.append(self._expression())
+                    while self._match(TokenType.COMMA):
+                        args.append(self._expression())
+                self._consume(TokenType.RPAREN, "Esperado ')' após argumentos da chamada.")
+                return CallExpr(name=name, args=args)
+            return VarRef(name)
 
         if self._match(TokenType.LPAREN):
             expr = self._expression()

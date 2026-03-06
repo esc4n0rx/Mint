@@ -71,7 +71,7 @@
       "patterns": [
         {
           "name": "keyword.control.mint",
-          "match": "\\b(program|init|initialization|endprogram|if|elseif|else|endif|while|endwhile)\\b"
+          "match": "\\b(program|init|initialization|endprogram|if|elseif|else|endif|while|endwhile|func|endfunc|return|returns)\\b"
         },
         {
           "name": "keyword.operator.logical.mint",
@@ -80,6 +80,10 @@
         {
           "name": "keyword.declaration.mint",
           "match": "\\b(var|type)\\b"
+        },
+        {
+          "name": "entity.name.function.mint",
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()"
         },
         {
           "name": "support.function.mint",

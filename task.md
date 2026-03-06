@@ -156,3 +156,17 @@ Aprimoramentos pontuais de semântica e documentação:
 * Docstring do linter atualizada para refletir suporte real a aritmética com `int`/`float`
 * `context.md` atualizado com os tipos atuais e regra de comparação lexicográfica Unicode para `string`/`char`
 
+
+## Feature: Funções tipadas com parâmetros e retorno
+
+**Data:** 2026-03-06
+
+### Resumo
+
+Implementado suporte a funções reutilizáveis no Mint com foco em escopo e tipagem:
+
+* Novas keywords/tokens: `FUNC`, `ENDFUNC`, `RETURN`, `RETURNS`
+* Parser e AST com declaração de função, parâmetros tipados, `RETURN`, chamada de função em expressão e chamada como comando para funções sem retorno
+* Linter com validação de assinatura, duplicidade de função/parâmetro, tipos de argumentos e retorno, além de `RETURN` fora de função
+* Interpreter com registro prévio de funções, frame local por chamada, binding de parâmetros, retorno imediato e uso de escopo local com precedência sobre globais
+* Highlighter do VS Code atualizado para novas keywords e melhor legibilidade de chamadas de função
