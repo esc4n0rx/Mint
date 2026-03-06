@@ -1,8 +1,9 @@
 from __future__ import annotations
-from typing import Dict, Any, Optional
+from dataclasses import dataclass
+from typing import Dict, Any, Optional, List
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, AssignStmt, WhileStmt,
-    Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, MintType
+    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, AssignStmt, WhileStmt, ReturnStmt, CallStmt,
+    FuncDecl, Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
 from .errors import RuntimeMintError
 
@@ -14,48 +15,99 @@ DEFAULTS: Dict[MintType, Any] = {
     "char": "\0",
 }
 
+
+class ReturnSignal(Exception):
+    def __init__(self, value: Any):
+        self.value = value
+
+
+@dataclass
+class Scope:
+    types: Dict[str, MintType]
+    env: Dict[str, Any]
+
+
 class Interpreter:
     def __init__(self):
-        self.types: Dict[str, MintType] = {}
-        self.env: Dict[str, Any] = {}
+        self.globals = Scope(types={}, env={})
+        self.scopes: List[Scope] = [self.globals]
+        self.funcs: Dict[str, FuncDecl] = {}
 
     def run(self, program: Program) -> None:
-        # init: declarações
+        for func in program.funcs:
+            self.funcs[func.name] = func
+
         for decl in program.decls:
             self._exec_decl(decl)
 
-        # initialization: lógica
         for stmt in program.body:
             self._exec_stmt(stmt)
 
+    def _current_scope(self) -> Scope:
+        return self.scopes[-1]
+
+    def _push_scope(self, scope: Scope) -> None:
+        self.scopes.append(scope)
+
+    def _pop_scope(self) -> None:
+        self.scopes.pop()
+
+    def _resolve_type(self, name: str) -> Optional[MintType]:
+        for scope in reversed(self.scopes):
+            if name in scope.types:
+                return scope.types[name]
+        return None
+
+    def _resolve_value(self, name: str) -> Any:
+        for scope in reversed(self.scopes):
+            if name in scope.env:
+                return scope.env[name]
+        raise RuntimeMintError(f"Variável '{name}' não declarada.")
+
+    def _assign_value(self, name: str, value: Any) -> None:
+        for scope in reversed(self.scopes):
+            if name in scope.types:
+                coerced = self._ensure_type(name, scope.types[name], value)
+                scope.env[name] = coerced
+                return
+        raise RuntimeMintError(f"Variável '{name}' não declarada.")
+
     def _exec_decl(self, decl: VarDeclStmt) -> None:
-        if decl.name in self.types:
+        scope = self._current_scope()
+        if decl.name in scope.types:
             raise RuntimeMintError(f"Variável '{decl.name}' já declarada.")
 
-        self.types[decl.name] = decl.vartype
+        scope.types[decl.name] = decl.vartype
 
         if decl.initializer is None:
-            self.env[decl.name] = DEFAULTS[decl.vartype]
+            scope.env[decl.name] = DEFAULTS[decl.vartype]
             return
 
         val = self._eval(decl.initializer)
-        coerced_val = self._ensure_type(decl.name, decl.vartype, val)
-        self.env[decl.name] = coerced_val
+        scope.env[decl.name] = self._ensure_type(decl.name, decl.vartype, val)
 
     def _exec_stmt(self, stmt: Stmt) -> None:
+        if isinstance(stmt, VarDeclStmt):
+            self._exec_decl(stmt)
+            return
         if isinstance(stmt, WriteStmt):
             val = self._eval(stmt.expr)
             print(self._format_value(val))
+            return
+        if isinstance(stmt, CallStmt):
+            self._call_function(stmt.call, require_value=False)
             return
         if isinstance(stmt, IfStmt):
             self._exec_if(stmt)
             return
         if isinstance(stmt, AssignStmt):
-            self._exec_assign(stmt)
+            self._assign_value(stmt.name, self._eval(stmt.expr))
             return
         if isinstance(stmt, WhileStmt):
             self._exec_while(stmt)
             return
+        if isinstance(stmt, ReturnStmt):
+            raise ReturnSignal(self._eval(stmt.expr))
 
         raise RuntimeMintError(f"Stmt não suportado: {type(stmt).__name__}")
 
@@ -72,13 +124,6 @@ class Interpreter:
             for inner in stmt.else_body:
                 self._exec_stmt(inner)
 
-    def _exec_assign(self, stmt: AssignStmt) -> None:
-        if stmt.name not in self.types:
-            raise RuntimeMintError(f"Variável '{stmt.name}' não declarada.")
-        val = self._eval(stmt.expr)
-        coerced_val = self._ensure_type(stmt.name, self.types[stmt.name], val)
-        self.env[stmt.name] = coerced_val
-
     def _exec_while(self, stmt: WhileStmt) -> None:
         while True:
             cond = self._eval(stmt.condition)
@@ -88,6 +133,41 @@ class Interpreter:
                 return
             for inner in stmt.body:
                 self._exec_stmt(inner)
+
+    def _call_function(self, expr: CallExpr, require_value: bool = True) -> Any:
+        func = self.funcs.get(expr.name)
+        if func is None:
+            raise RuntimeMintError(f"Função '{expr.name}' não declarada.")
+
+        if len(expr.args) != len(func.params):
+            raise RuntimeMintError(
+                f"Função '{expr.name}' espera {len(func.params)} argumentos, mas recebeu {len(expr.args)}."
+            )
+
+        arg_values = [self._eval(arg) for arg in expr.args]
+
+        local_scope = Scope(types={}, env={})
+        for i, param in enumerate(func.params):
+            local_scope.types[param.name] = param.param_type
+            local_scope.env[param.name] = self._ensure_type(param.name, param.param_type, arg_values[i])
+
+        self._push_scope(local_scope)
+        try:
+            for st in func.body:
+                self._exec_stmt(st)
+        except ReturnSignal as signal:
+            if func.return_type is None:
+                raise RuntimeMintError(f"Função '{func.name}' não declara RETURNS e não pode retornar valor.")
+            return self._ensure_type(func.name, func.return_type, signal.value)
+        finally:
+            self._pop_scope()
+
+        if func.return_type is not None:
+            raise RuntimeMintError(f"Função '{func.name}' deveria retornar {func.return_type}.")
+
+        if require_value:
+            raise RuntimeMintError(f"Função '{func.name}' não retorna valor e não pode ser usada em expressão.")
+        return None
 
     def _eval(self, expr: Expr) -> Any:
         if isinstance(expr, IntLit):
@@ -106,9 +186,10 @@ class Interpreter:
             return expr.value
 
         if isinstance(expr, VarRef):
-            if expr.name not in self.env:
-                raise RuntimeMintError(f"Variável '{expr.name}' não declarada.")
-            return self.env[expr.name]
+            return self._resolve_value(expr.name)
+
+        if isinstance(expr, CallExpr):
+            return self._call_function(expr, require_value=True)
 
         if isinstance(expr, Unary):
             v = self._eval(expr.expr)
@@ -162,14 +243,14 @@ class Interpreter:
                 return False
             right_val = self._eval(right_expr)
             if not isinstance(right_val, bool):
-                raise RuntimeMintError(f"Operador AND requer bool em ambos os lados.")
+                raise RuntimeMintError("Operador AND requer bool em ambos os lados.")
             return right_val
         if op == "or":
             if left:
                 return True
             right_val = self._eval(right_expr)
             if not isinstance(right_val, bool):
-                raise RuntimeMintError(f"Operador OR requer bool em ambos os lados.")
+                raise RuntimeMintError("Operador OR requer bool em ambos os lados.")
             return right_val
         raise RuntimeMintError(f"Operador lógico inválido: {op}")
 

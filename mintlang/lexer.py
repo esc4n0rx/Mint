@@ -28,6 +28,14 @@ KEYWORDS = {
     "endif": TokenType.ENDIF,
     "while": TokenType.WHILE,
     "endwhile": TokenType.ENDWHILE,
+    "func": TokenType.FUNC,
+    "endfunc": TokenType.ENDFUNC,
+    "return": TokenType.RETURN,
+    "returns": TokenType.RETURNS,
+    "FUNC": TokenType.FUNC,
+    "ENDFUNC": TokenType.ENDFUNC,
+    "RETURN": TokenType.RETURN,
+    "RETURNS": TokenType.RETURNS,
     "and": TokenType.AND,
     "or": TokenType.OR,
     "not": TokenType.NOT,
@@ -146,6 +154,7 @@ class Lexer:
                 "(": TokenType.LPAREN,
                 ")": TokenType.RPAREN,
                 ".": TokenType.DOT,
+                ",": TokenType.COMMA,
             }
             if c in single:
                 self._line_has_code = True

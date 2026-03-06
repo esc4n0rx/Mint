@@ -17,6 +17,7 @@ class TokenType(Enum):
     LTE = auto()
     GTE = auto()
     DOT = auto()
+    COMMA = auto()
 
     # Literals / identifiers
     NUMBER = auto()
@@ -50,6 +51,10 @@ class TokenType(Enum):
     ENDIF = auto()
     WHILE = auto()
     ENDWHILE = auto()
+    FUNC = auto()
+    ENDFUNC = auto()
+    RETURN = auto()
+    RETURNS = auto()
     AND = auto()
     OR = auto()
     NOT = auto()
