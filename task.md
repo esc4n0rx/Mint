@@ -142,3 +142,17 @@ Adicionados operadores lógicos com precedência e short-circuit:
 * Linter validando uso estrito de bool e mensagens educativas
 * Interpreter com avaliação curta (short-circuit) em `and`/`or`
 * Syntax highlighting e exemplos `.mint` atualizados
+
+## Feature: Regras de comparação e widening int->float
+
+**Data:** 2026-03-06
+
+### Resumo
+
+Aprimoramentos pontuais de semântica e documentação:
+
+* Linter agora bloqueia comparações encadeadas implícitas (ex.: `a < b < c`) com mensagem orientando uso de parênteses e `AND`/`OR`
+* Inicialização de variáveis `float` agora aceita `int` com conversão implícita segura (`int -> float`)
+* Docstring do linter atualizada para refletir suporte real a aritmética com `int`/`float`
+* `context.md` atualizado com os tipos atuais e regra de comparação lexicográfica Unicode para `string`/`char`
+

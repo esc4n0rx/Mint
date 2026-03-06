@@ -39,8 +39,8 @@ class Interpreter:
             return
 
         val = self._eval(decl.initializer)
-        self._ensure_type(decl.name, decl.vartype, val)
-        self.env[decl.name] = val
+        coerced_val = self._ensure_type(decl.name, decl.vartype, val)
+        self.env[decl.name] = coerced_val
 
     def _exec_stmt(self, stmt: Stmt) -> None:
         if isinstance(stmt, WriteStmt):
@@ -192,20 +192,24 @@ class Interpreter:
 
         raise RuntimeMintError(f"Comparação entre tipos incompatíveis: {type(left).__name__} {op} {type(right).__name__}.")
 
-    def _ensure_type(self, name: str, t: MintType, val: Any) -> None:
+    def _ensure_type(self, name: str, t: MintType, val: Any) -> Any:
         if t == "int" and not isinstance(val, int):
             raise RuntimeMintError(f"'{name}' é int, mas recebeu {type(val).__name__}.")
         if t == "string" and not isinstance(val, str):
             raise RuntimeMintError(f"'{name}' é string, mas recebeu {type(val).__name__}.")
         if t == "bool" and not isinstance(val, bool):
             raise RuntimeMintError(f"'{name}' é bool, mas recebeu {type(val).__name__}.")
-        if t == "float" and not isinstance(val, float):
-            raise RuntimeMintError(f"'{name}' é float, mas recebeu {type(val).__name__}.")
+        if t == "float":
+            if isinstance(val, int):
+                return float(val)
+            if not isinstance(val, float):
+                raise RuntimeMintError(f"'{name}' é float, mas recebeu {type(val).__name__}.")
         if t == "char":
             if not isinstance(val, str):
                 raise RuntimeMintError(f"'{name}' é char, mas recebeu {type(val).__name__}.")
             if len(val) != 1:
                 raise RuntimeMintError(f"'{name}' é char, mas recebeu string com {len(val)} caracteres.")
+        return val
 
     def _format_value(self, val: Any) -> str:
         if isinstance(val, bool):

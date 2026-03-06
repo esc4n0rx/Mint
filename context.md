@@ -41,7 +41,9 @@ endprogram.
 ### Tipos suportados
 
 * `int`
+* `float`
 * `string`
+* `char`
 * `bool`
 
 ### Variáveis
@@ -74,7 +76,8 @@ write((num + 2) * 5).
 
 * Operadores: `+ - * /`
 * Parênteses suportados
-* Aritmética válida apenas para `int` (MVP)
+* Aritmética com `int` e `float` (promoção para `float` quando necessário)
+* Comparações para `string`/`char` usam ordem lexicográfica por Unicode code point (sem locale)
 
 ### Comentários
 
