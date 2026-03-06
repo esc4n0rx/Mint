@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, AssignStmt, WhileStmt, ReturnStmt, CallStmt,
+    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, WhileStmt, ReturnStmt, CallStmt,
     FuncDecl, Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
 from .errors import RuntimeMintError
@@ -102,6 +102,20 @@ class Interpreter:
             return
         if isinstance(stmt, AssignStmt):
             self._assign_value(stmt.name, self._eval(stmt.expr))
+            return
+        if isinstance(stmt, InputStmt):
+            if not isinstance(stmt.target, VarRef):
+                raise RuntimeMintError("input aceita apenas referência de variável.")
+            name = stmt.target.name
+            var_type = self._resolve_type(name)
+            if var_type is None:
+                raise RuntimeMintError(f"Variável '{name}' não declarada.")
+            raw = input()
+            parsed = self._parse_input_value(name, var_type, raw)
+            self._assign_value(name, parsed)
+            return
+        if isinstance(stmt, MoveStmt):
+            self._assign_value(stmt.target, self._eval(stmt.source))
             return
         if isinstance(stmt, WhileStmt):
             self._exec_while(stmt)
@@ -314,6 +328,31 @@ class Interpreter:
             if len(val) != 1:
                 raise RuntimeMintError(f"'{name}' é char, mas recebeu string com {len(val)} caracteres.")
         return val
+
+    def _parse_input_value(self, name: str, vartype: MintType, raw: str) -> Any:
+        if vartype == "string":
+            return raw
+        if vartype == "int":
+            try:
+                return int(raw)
+            except ValueError:
+                raise RuntimeMintError(f"Input inválido para variável '{name}': esperado int.")
+        if vartype == "float":
+            try:
+                return float(raw)
+            except ValueError:
+                raise RuntimeMintError(f"Input inválido para variável '{name}': esperado float.")
+        if vartype == "bool":
+            if raw == "true":
+                return True
+            if raw == "false":
+                return False
+            raise RuntimeMintError(f"Input inválido para variável '{name}': esperado bool (true/false).")
+        if vartype == "char":
+            if len(raw) != 1:
+                raise RuntimeMintError(f"Input inválido para variável '{name}': esperado char.")
+            return raw
+        raise RuntimeMintError(f"Tipo de input não suportado para '{name}': {vartype}.")
 
     def _format_value(self, val: Any) -> str:
         if isinstance(val, bool):

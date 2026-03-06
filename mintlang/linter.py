@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 from .ast_nodes import (
-    Program, VarDeclStmt, WriteStmt, IfStmt, AssignStmt, WhileStmt, ReturnStmt, CallStmt, FuncDecl, FuncParam, Stmt,
+    Program, VarDeclStmt, WriteStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, WhileStmt, ReturnStmt, CallStmt, FuncDecl, FuncParam, Stmt,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
 
@@ -106,6 +106,29 @@ class Linter:
             if sig is not None and sig.return_type is not None:
                 issues.append(LintIssue(f"Função '{stmt.call.name}' retorna valor e deve ser usada em expressão."))
             self._lint_call(stmt.call, sym, funcs, issues, require_value=False)
+            return
+
+        if isinstance(stmt, InputStmt):
+            if not isinstance(stmt.target, VarRef):
+                issues.append(LintIssue("input aceita apenas referência de variável (ex.: input(nome))."))
+                self._infer_type(stmt.target, sym, funcs, issues)
+                return
+            var_type = sym.get(stmt.target.name)
+            if var_type is None:
+                issues.append(LintIssue(f"Input para variável não declarada: '{stmt.target.name}'."))
+            return
+
+        if isinstance(stmt, MoveStmt):
+            var_type = sym.get(stmt.target)
+            if var_type is None:
+                issues.append(LintIssue(f"Move para variável não declarada: '{stmt.target}'."))
+                self._infer_type(stmt.source, sym, funcs, issues)
+                return
+            source_type = self._infer_type(stmt.source, sym, funcs, issues)
+            if source_type is not None and not self._is_assignment_compatible(var_type, source_type):
+                issues.append(LintIssue(
+                    f"Incompatibilidade no move: '{stmt.target}' é {var_type} mas recebeu {source_type}."
+                ))
             return
 
         if isinstance(stmt, IfStmt):
