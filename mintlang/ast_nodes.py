@@ -72,6 +72,16 @@ class IfStmt(Stmt):
     branches: List[IfBranch]
     else_body: Optional[List[Stmt]] = None
 
+@dataclass
+class AssignStmt(Stmt):
+    name: str
+    expr: Expr
+
+@dataclass
+class WhileStmt(Stmt):
+    condition: Expr
+    body: List[Stmt]
+
 # -------------------------
 # Program structure
 # -------------------------

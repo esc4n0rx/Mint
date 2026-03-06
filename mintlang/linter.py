@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Union, Tuple
 from .ast_nodes import (
-    Program, VarDeclStmt, WriteStmt, IfStmt, Stmt,
+    Program, VarDeclStmt, WriteStmt, IfStmt, AssignStmt, WhileStmt, Stmt,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, MintType
 )
 from .errors import LintError
@@ -57,6 +57,25 @@ class Linter:
             if stmt.else_body is not None:
                 for inner in stmt.else_body:
                     self._lint_stmt(inner, sym, issues)
+            return
+        if isinstance(stmt, AssignStmt):
+            var_type = sym.get(stmt.name)
+            if var_type is None:
+                issues.append(LintIssue(f"Atribuição para variável não declarada: '{stmt.name}'."))
+                self._infer_type(stmt.expr, sym, issues)
+                return
+            expr_type = self._infer_type(stmt.expr, sym, issues)
+            if expr_type is not None and not self._is_assignment_compatible(var_type, expr_type):
+                issues.append(LintIssue(
+                    f"Incompatibilidade na atribuição: '{stmt.name}' é {var_type} mas recebeu {expr_type}."
+                ))
+            return
+        if isinstance(stmt, WhileStmt):
+            cond_type = self._infer_type(stmt.condition, sym, issues)
+            if cond_type is not None and cond_type != "bool":
+                issues.append(LintIssue("Condição do while deve ser bool."))
+            for inner in stmt.body:
+                self._lint_stmt(inner, sym, issues)
             return
 
         issues.append(LintIssue(f"Statement não suportado no linter: {type(stmt).__name__}"))

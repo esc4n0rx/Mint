@@ -26,6 +26,8 @@ KEYWORDS = {
     "elseif": TokenType.ELSEIF,
     "else": TokenType.ELSE,
     "endif": TokenType.ENDIF,
+    "while": TokenType.WHILE,
+    "endwhile": TokenType.ENDWHILE,
     "and": TokenType.AND,
     "or": TokenType.OR,
     "not": TokenType.NOT,

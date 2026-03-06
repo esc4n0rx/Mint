@@ -18,6 +18,8 @@ Mint e uma linguagem interpretada em Python com foco educacional. O projeto prio
 - Expressoes aritmeticas com precedencia e parenteses
 - Comparacoes com validacao de tipos
 - Condicionais `if/elseif/else/endif`
+- Atribuicao com `=` (respeitando tipo da variavel)
+- Repeticao com `while/endwhile`
 - Operadores logicos `and/or/not` com short-circuit
 - Linter estatico antes da execucao
 - Syntax highlighting via extensao do VS Code
@@ -34,9 +36,10 @@ program init.
   var num type int = 10.
   var ok type bool = true.
 initialization.
-  if (num > 5) and ok.
-    write("ok").
-  endif.
+  while num < 15.
+    write(num).
+    num = num + 1.
+  endwhile.
 endprogram.
 ```
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Any, Optional
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt,
+    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, AssignStmt, WhileStmt,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, MintType
 )
 from .errors import RuntimeMintError
@@ -50,6 +50,12 @@ class Interpreter:
         if isinstance(stmt, IfStmt):
             self._exec_if(stmt)
             return
+        if isinstance(stmt, AssignStmt):
+            self._exec_assign(stmt)
+            return
+        if isinstance(stmt, WhileStmt):
+            self._exec_while(stmt)
+            return
 
         raise RuntimeMintError(f"Stmt não suportado: {type(stmt).__name__}")
 
@@ -64,6 +70,23 @@ class Interpreter:
                 return
         if stmt.else_body is not None:
             for inner in stmt.else_body:
+                self._exec_stmt(inner)
+
+    def _exec_assign(self, stmt: AssignStmt) -> None:
+        if stmt.name not in self.types:
+            raise RuntimeMintError(f"Variável '{stmt.name}' não declarada.")
+        val = self._eval(stmt.expr)
+        coerced_val = self._ensure_type(stmt.name, self.types[stmt.name], val)
+        self.env[stmt.name] = coerced_val
+
+    def _exec_while(self, stmt: WhileStmt) -> None:
+        while True:
+            cond = self._eval(stmt.condition)
+            if not isinstance(cond, bool):
+                raise RuntimeMintError("Condição do while deve ser bool.")
+            if not cond:
+                return
+            for inner in stmt.body:
                 self._exec_stmt(inner)
 
     def _eval(self, expr: Expr) -> Any:

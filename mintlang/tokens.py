@@ -48,6 +48,8 @@ class TokenType(Enum):
     ELSEIF = auto()
     ELSE = auto()
     ENDIF = auto()
+    WHILE = auto()
+    ENDWHILE = auto()
     AND = auto()
     OR = auto()
     NOT = auto()
