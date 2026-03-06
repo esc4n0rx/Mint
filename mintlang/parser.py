@@ -3,7 +3,7 @@ from typing import List, Optional
 from .tokens import Token, TokenType
 from .errors import ParserError
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, IfBranch,
+    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, WhileStmt,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, MintType
 )
 
@@ -12,9 +12,11 @@ class Parser:
     Gramática (MVP 2):
       program      -> "program" "init" "." decls "initialization" "." stmts "endprogram" "."
       decls        -> ( "var" IDENT "type" TYPE ( "=" expr )? "." )*
-      stmts        -> ( write_stmt | if_stmt )*
+      stmts        -> ( write_stmt | if_stmt | assign_stmt | while_stmt )*
       write_stmt   -> "write" "(" expr ")" "."
       if_stmt      -> "if" expr "." stmts ( "elseif" expr "." stmts )* ( "else" "." stmts )? "endif" "."
+      assign_stmt  -> IDENT "=" expr "."
+      while_stmt   -> "while" expr "." stmts "endwhile" "."
       expr         -> or_expr
       or_expr      -> and_expr ( "or" and_expr )*
       and_expr     -> not_expr ( "and" not_expr )*
@@ -94,6 +96,12 @@ class Parser:
         if self._match(TokenType.IF):
             return self._if_stmt()
 
+        if self._match(TokenType.WHILE):
+            return self._while_stmt()
+
+        if self._check(TokenType.IDENT) and self._check_next(TokenType.EQUAL):
+            return self._assign_stmt()
+
         t = self._peek()
         raise ParserError(f"Comando inesperado '{t.lexeme}' em {t.line}:{t.col}")
 
@@ -116,6 +124,21 @@ class Parser:
         self._consume(TokenType.ENDIF, "Esperado 'endif'.")
         self._consume(TokenType.DOT, "Faltou '.' após endif.")
         return IfStmt(branches, else_body)
+
+    def _while_stmt(self) -> WhileStmt:
+        condition = self._expression()
+        self._consume(TokenType.DOT, "Faltou '.' após condição do while.")
+        body = self._block_until({TokenType.ENDWHILE})
+        self._consume(TokenType.ENDWHILE, "Esperado 'endwhile'.")
+        self._consume(TokenType.DOT, "Faltou '.' após endwhile.")
+        return WhileStmt(condition, body)
+
+    def _assign_stmt(self) -> AssignStmt:
+        name = self._consume(TokenType.IDENT, "Esperado nome da variável.").lexeme
+        self._consume(TokenType.EQUAL, "Esperado '=' na atribuição.")
+        expr = self._expression()
+        self._consume(TokenType.DOT, "Faltou '.' no fim da atribuição.")
+        return AssignStmt(name=name, expr=expr)
 
     def _block_until(self, stop: set[TokenType]) -> List[Stmt]:
         body: List[Stmt] = []
@@ -234,6 +257,11 @@ class Parser:
 
     def _check_any(self, types: set[TokenType]) -> bool:
         return self._peek().type in types
+
+    def _check_next(self, ttype: TokenType) -> bool:
+        if self.i + 1 >= len(self.tokens):
+            return False
+        return self.tokens[self.i + 1].type == ttype
 
     def _advance(self) -> Token:
         if not self._check(TokenType.EOF):
