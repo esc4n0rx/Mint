@@ -17,7 +17,7 @@ class Linter:
     - variáveis não duplicadas
     - uso de variável declarada
     - tipo válido e coerência de inicialização
-    - operações aritméticas só com int (por enquanto)
+    - operações aritméticas com int/float (com promoção para float)
     """
     def lint(self, program: Program) -> List[LintIssue]:
         issues: List[LintIssue] = []
@@ -32,7 +32,7 @@ class Linter:
 
             if d.initializer is not None:
                 it = self._infer_type(d.initializer, sym, issues)
-                if it is not None and it != d.vartype:
+                if it is not None and not self._is_assignment_compatible(d.vartype, it):
                     issues.append(LintIssue(
                         f"Incompatibilidade: '{d.name}' é {d.vartype} mas inicializa com {it}."
                     ))
@@ -105,6 +105,11 @@ class Linter:
                     return None
                 return "bool"
             if expr.op in ("==", "!=", "<", ">", "<=", ">="):
+                if self._is_chained_comparison(expr):
+                    issues.append(LintIssue(
+                        "Comparação encadeada não suportada. Use parênteses e AND/OR."
+                    ))
+                    return None
                 if lt is None or rt is None:
                     return None
                 if lt in ("int", "float") and rt in ("int", "float"):
@@ -141,3 +146,16 @@ class Linter:
 
         issues.append(LintIssue(f"Expressão desconhecida no linter: {type(expr).__name__}"))
         return None
+
+    def _is_assignment_compatible(self, target: MintType, source: MintType) -> bool:
+        if target == source:
+            return True
+        return target == "float" and source == "int"
+
+    def _is_chained_comparison(self, expr: Binary) -> bool:
+        if expr.op not in ("==", "!=", "<", ">", "<=", ">="):
+            return False
+        return (
+            isinstance(expr.left, Binary)
+            and expr.left.op in ("==", "!=", "<", ">", "<=", ">=")
+        )
