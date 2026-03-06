@@ -3,7 +3,7 @@ from typing import List, Optional
 from .tokens import Token, TokenType
 from .errors import ParserError
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, WhileStmt, ReturnStmt, CallStmt,
+    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, InputStmt, MoveStmt, WhileStmt, ReturnStmt, CallStmt,
     FuncDecl, FuncParam,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
@@ -131,6 +131,20 @@ class Parser:
             self._consume(TokenType.RPAREN, "Esperado ')' após expressão do write.")
             self._consume(TokenType.DOT, "Faltou '.' no fim do write.")
             return WriteStmt(expr)
+
+        if self._match(TokenType.INPUT):
+            self._consume(TokenType.LPAREN, "Esperado '(' após input.")
+            target = self._expression()
+            self._consume(TokenType.RPAREN, "Esperado ')' após alvo do input.")
+            self._consume(TokenType.DOT, "Faltou '.' no fim do input.")
+            return InputStmt(target=target)
+
+        if self._match(TokenType.MOVE):
+            source = self._expression()
+            self._consume(TokenType.TO, "Esperado 'to' no comando move.")
+            target = self._consume(TokenType.IDENT, "Destino do move deve ser variável.").lexeme
+            self._consume(TokenType.DOT, "Faltou '.' no fim do move.")
+            return MoveStmt(source=source, target=target)
 
         if self._match(TokenType.IF):
             return self._if_stmt()

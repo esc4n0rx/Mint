@@ -83,6 +83,15 @@ class AssignStmt(Stmt):
     expr: Expr
 
 @dataclass
+class InputStmt(Stmt):
+    target: Expr
+
+@dataclass
+class MoveStmt(Stmt):
+    source: Expr
+    target: str
+
+@dataclass
 class WhileStmt(Stmt):
     condition: Expr
     body: List[Stmt]
