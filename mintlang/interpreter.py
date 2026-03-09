@@ -2,8 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, WhileStmt, ReturnStmt, CallStmt,
-    FuncDecl, StructDecl, FieldAccessExpr,
+    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, WhileStmt, ReturnStmt, CallStmt,
+    FuncDecl, StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
 from .errors import RuntimeMintError
@@ -104,6 +104,12 @@ class Interpreter:
         if isinstance(stmt, WriteStmt):
             val = self._eval(stmt.expr)
             print(self._format_value(val))
+            return
+        if isinstance(stmt, AddStmt):
+            self._append_to_collection(stmt.collection, stmt.value, expected="list")
+            return
+        if isinstance(stmt, InsertStmt):
+            self._append_to_collection(stmt.table, stmt.value, expected="table")
             return
         if isinstance(stmt, CallStmt):
             self._call_function(stmt.call, require_value=False)
@@ -241,6 +247,10 @@ class Interpreter:
             self._pop_scope()
 
     def _default_value_for_type(self, mint_type: MintType) -> Any:
+        if self._extract_collection_inner(mint_type, "list") is not None:
+            return []
+        if self._extract_collection_inner(mint_type, "table") is not None:
+            return []
         if mint_type in DEFAULTS:
             return DEFAULTS[mint_type]
         struct_fields = self.structs.get(mint_type)
@@ -265,8 +275,28 @@ class Interpreter:
         if isinstance(expr, VarRef):
             return self._resolve_value(expr.name)
         if isinstance(expr, FieldAccessExpr):
-            field_map, _, field_name = self._resolve_field_ref(expr)
-            return field_map[field_name]
+            base_value = self._eval(expr.base)
+            if not isinstance(base_value, dict) or "fields" not in base_value:
+                raise RuntimeMintError("Acesso de campo inválido: base não é struct.")
+            if expr.field not in base_value["fields"]:
+                struct_name = base_value.get("__struct__", "desconhecida")
+                raise RuntimeMintError(f"Campo '{expr.field}' não existe na struct '{struct_name}'.")
+            return base_value["fields"][expr.field]
+        if isinstance(expr, IndexAccessExpr):
+            collection = self._eval(expr.base)
+            index = self._eval(expr.index)
+            if not isinstance(index, int):
+                raise RuntimeMintError("Índice deve ser numérico (int).")
+            if not isinstance(collection, list):
+                raise RuntimeMintError("Acesso por índice requer list<T> ou table<T>.")
+            if index < 0 or index >= len(collection):
+                raise RuntimeMintError("Índice fora dos limites.")
+            return collection[index]
+        if isinstance(expr, SizeCall):
+            collection = self._eval(expr.collection)
+            if not isinstance(collection, list):
+                raise RuntimeMintError("size() aceita apenas list<T> ou table<T>.")
+            return len(collection)
         if isinstance(expr, CallExpr):
             return self._call_function(expr, require_value=True)
 
@@ -376,6 +406,16 @@ class Interpreter:
         raise RuntimeMintError(f"Comparação entre tipos incompatíveis: {type(left).__name__} {op} {type(right).__name__}.")
 
     def _ensure_type(self, name: str, t: MintType, val: Any) -> Any:
+        list_inner = self._extract_collection_inner(t, "list")
+        if list_inner is not None:
+            if not isinstance(val, list):
+                raise RuntimeMintError(f"'{name}' é {t}, mas recebeu valor incompatível.")
+            return val
+        table_inner = self._extract_collection_inner(t, "table")
+        if table_inner is not None:
+            if not isinstance(val, list):
+                raise RuntimeMintError(f"'{name}' é {t}, mas recebeu valor incompatível.")
+            return val
         if t == "int" and not isinstance(val, int):
             raise RuntimeMintError(f"'{name}' é int, mas recebeu {type(val).__name__}.")
         if t == "string" and not isinstance(val, str):
@@ -429,3 +469,25 @@ class Interpreter:
         if isinstance(val, dict) and "fields" in val:
             return str(val["fields"])
         return str(val)
+
+    def _append_to_collection(self, collection_expr: Expr, value_expr: Expr, expected: str) -> None:
+        if not isinstance(collection_expr, VarRef):
+            raise RuntimeMintError("Coleção de destino deve ser uma variável.")
+        collection_name = collection_expr.name
+        collection_type = self._resolve_type(collection_name)
+        if collection_type is None:
+            raise RuntimeMintError(f"Variável '{collection_name}' não declarada.")
+        inner_type = self._extract_collection_inner(collection_type, expected)
+        if inner_type is None:
+            raise RuntimeMintError(f"Operação inválida: esperado {expected}<T>.")
+        collection_val = self._resolve_value(collection_name)
+        if not isinstance(collection_val, list):
+            raise RuntimeMintError(f"Valor de '{collection_name}' não é coleção válida.")
+        value = self._eval(value_expr)
+        collection_val.append(self._ensure_type(collection_name, inner_type, value))
+
+    def _extract_collection_inner(self, value_type: MintType, collection_name: str) -> Optional[MintType]:
+        prefix = f"{collection_name}<"
+        if not value_type.startswith(prefix) or not value_type.endswith(">"):
+            return None
+        return value_type[len(prefix):-1].strip()

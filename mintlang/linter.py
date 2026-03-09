@@ -2,8 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 from .ast_nodes import (
-    Program, VarDeclStmt, WriteStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, WhileStmt, ReturnStmt, CallStmt, FuncDecl, Stmt,
-    StructDecl, FieldAccessExpr,
+    Program, VarDeclStmt, WriteStmt, AddStmt, InsertStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, WhileStmt, ReturnStmt, CallStmt, FuncDecl, Stmt,
+    StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
 
@@ -34,8 +34,9 @@ class Linter:
                 issues.append(LintIssue(f"Função '{func.name}' já declarada."))
                 continue
             for param in func.params:
-                if not self._is_valid_value_type(param.param_type, structs):
-                    issues.append(LintIssue(f"Tipo inválido no parâmetro '{param.name}' da função '{func.name}': {param.param_type}."))
+                err = self._validate_declared_type(param.param_type, structs)
+                if err is not None:
+                    issues.append(LintIssue(f"Tipo inválido no parâmetro '{param.name}' da função '{func.name}': {err}"))
             if func.return_type is not None and not self._is_valid_value_type(func.return_type, structs):
                 issues.append(LintIssue(f"Tipo de retorno inválido na função '{func.name}': {func.return_type}."))
             funcs[func.name] = FuncSignature(
@@ -47,8 +48,9 @@ class Linter:
             if d.name in global_sym:
                 issues.append(LintIssue(f"Variável '{d.name}' declarada mais de uma vez."))
                 continue
-            if not self._is_valid_value_type(d.vartype, structs):
-                issues.append(LintIssue(f"Tipo inválido para variável '{d.name}': {d.vartype}."))
+            err = self._validate_declared_type(d.vartype, structs)
+            if err is not None:
+                issues.append(LintIssue(f"Tipo inválido para variável '{d.name}': {err}"))
                 continue
             global_sym[d.name] = d.vartype
             if d.initializer is not None:
@@ -125,8 +127,9 @@ class Linter:
             if stmt.name in sym:
                 issues.append(LintIssue(f"Variável '{stmt.name}' declarada mais de uma vez."))
                 return
-            if not self._is_valid_value_type(stmt.vartype, structs):
-                issues.append(LintIssue(f"Tipo inválido para variável '{stmt.name}': {stmt.vartype}."))
+            err = self._validate_declared_type(stmt.vartype, structs)
+            if err is not None:
+                issues.append(LintIssue(f"Tipo inválido para variável '{stmt.name}': {err}"))
                 return
             sym[stmt.name] = stmt.vartype
             if stmt.initializer is not None:
@@ -139,6 +142,28 @@ class Linter:
 
         if isinstance(stmt, WriteStmt):
             self._infer_type(stmt.expr, sym, funcs, structs, issues)
+            return
+
+        if isinstance(stmt, AddStmt):
+            collection_type = self._infer_type(stmt.collection, sym, funcs, structs, issues)
+            value_type = self._infer_type(stmt.value, sym, funcs, structs, issues)
+            inner_type = self._extract_collection_inner(collection_type, "list")
+            if inner_type is None:
+                issues.append(LintIssue("add requer uma coleção do tipo list<T>."))
+                return
+            if value_type is not None and not self._is_assignment_compatible(inner_type, value_type):
+                issues.append(LintIssue(f"Tipo incompatível ao inserir em {collection_type}."))
+            return
+
+        if isinstance(stmt, InsertStmt):
+            table_type = self._infer_type(stmt.table, sym, funcs, structs, issues)
+            value_type = self._infer_type(stmt.value, sym, funcs, structs, issues)
+            inner_type = self._extract_collection_inner(table_type, "table")
+            if inner_type is None:
+                issues.append(LintIssue("insert requer uma coleção do tipo table<Struct>."))
+                return
+            if value_type is not None and value_type != inner_type:
+                issues.append(LintIssue(f"Tipo incompatível ao inserir em {table_type}."))
             return
 
         if isinstance(stmt, CallStmt):
@@ -299,6 +324,25 @@ class Linter:
             return t
         if isinstance(expr, FieldAccessExpr):
             return self._resolve_field_type(expr, sym, structs, issues)
+        if isinstance(expr, IndexAccessExpr):
+            base_type = self._infer_type(expr.base, sym, funcs, structs, issues)
+            index_type = self._infer_type(expr.index, sym, funcs, structs, issues)
+            if index_type is not None and index_type != "int":
+                issues.append(LintIssue("Índice deve ser numérico (int)."))
+            list_inner = self._extract_collection_inner(base_type, "list")
+            if list_inner is not None:
+                return list_inner
+            table_inner = self._extract_collection_inner(base_type, "table")
+            if table_inner is not None:
+                return table_inner
+            if base_type is not None:
+                issues.append(LintIssue("Acesso por índice requer list<T> ou table<T>."))
+            return None
+        if isinstance(expr, SizeCall):
+            collection_type = self._infer_type(expr.collection, sym, funcs, structs, issues)
+            if self._extract_collection_inner(collection_type, "list") is None and self._extract_collection_inner(collection_type, "table") is None:
+                issues.append(LintIssue("size() aceita apenas list<T> ou table<T>."))
+            return "int"
         if isinstance(expr, CallExpr):
             return self._lint_call(expr, sym, funcs, structs, issues, require_value=True)
 
@@ -414,7 +458,40 @@ class Linter:
         return target == "float" and source == "int"
 
     def _is_valid_value_type(self, value_type: MintType, structs: Dict[str, Dict[str, MintType]]) -> bool:
-        return value_type in BUILTIN_TYPES or value_type in structs
+        if value_type in BUILTIN_TYPES or value_type in structs:
+            return True
+        list_inner = self._extract_collection_inner(value_type, "list")
+        if list_inner is not None:
+            return self._is_valid_value_type(list_inner, structs)
+        table_inner = self._extract_collection_inner(value_type, "table")
+        if table_inner is not None:
+            return table_inner in structs
+        return False
+
+    def _validate_declared_type(self, value_type: MintType, structs: Dict[str, Dict[str, MintType]]) -> Optional[str]:
+        if value_type in BUILTIN_TYPES or value_type in structs:
+            return None
+        list_inner = self._extract_collection_inner(value_type, "list")
+        if list_inner is not None:
+            if not self._is_valid_value_type(list_inner, structs):
+                return f"Tipo '{list_inner}' não existe."
+            return None
+        table_inner = self._extract_collection_inner(value_type, "table")
+        if table_inner is not None:
+            if table_inner not in structs:
+                if table_inner in BUILTIN_TYPES:
+                    return "TABLE exige tipo STRUCT."
+                return f"Tipo '{table_inner}' não existe."
+            return None
+        return value_type
+
+    def _extract_collection_inner(self, value_type: Optional[MintType], collection_name: str) -> Optional[MintType]:
+        if value_type is None:
+            return None
+        prefix = f"{collection_name}<"
+        if not value_type.startswith(prefix) or not value_type.endswith(">"):
+            return None
+        return value_type[len(prefix):-1].strip()
 
     def _is_chained_comparison(self, expr: Binary) -> bool:
         if expr.op not in ("==", "!=", "<", ">", "<=", ">="):

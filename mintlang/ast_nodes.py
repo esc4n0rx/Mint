@@ -40,6 +40,17 @@ class FieldAccessExpr(Expr):
     base: Expr
     field: str
 
+
+@dataclass
+class IndexAccessExpr(Expr):
+    base: Expr
+    index: Expr
+
+
+@dataclass
+class SizeCall(Expr):
+    collection: Expr
+
 @dataclass
 class Binary(Expr):
     left: Expr
@@ -68,6 +79,16 @@ class StructDecl:
     name: str
     fields: List[StructField]
 
+
+@dataclass
+class ListType:
+    inner_type: MintType
+
+
+@dataclass
+class TableType:
+    inner_type: MintType
+
 # -------------------------
 # Statements
 # -------------------------
@@ -78,6 +99,18 @@ class Stmt:
 @dataclass
 class WriteStmt(Stmt):
     expr: Expr
+
+
+@dataclass
+class AddStmt(Stmt):
+    collection: Expr
+    value: Expr
+
+
+@dataclass
+class InsertStmt(Stmt):
+    table: Expr
+    value: Expr
 
 @dataclass
 class VarDeclStmt(Stmt):

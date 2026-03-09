@@ -71,3 +71,14 @@ Registro consolidado das funcionalidades implementadas.
   - permitir leitura/escrita de campos e `input` em campos.
 - Highlighter do VS Code atualizado em `vscode-mint/syntaxes/mint.tmLanguage.json` para destacar `STRUCT`, `ENDSTRUCT` e acessos com `.`.
 - Exemplo adicionado: `examples/struct_ok.mint`.
+
+## 2026-03-09 — Feature: LIST e TABLE
+- Resumo: Implementação de coleções tipadas para armazenar múltiplos registros.
+- Core da linguagem atualizado com suporte a:
+  - tipos genéricos `list<T>` e `table<T>` no parser/linter/interpreter;
+  - comandos `add(lista, valor)` e `insert(tabela, registro)`;
+  - acesso por índice `colecao[indice]` com validação de tipo e erro de limite;
+  - função builtin `size(colecao)` para `list` e `table`;
+  - leitura de campos em registros indexados (ex.: `clients[0].name`).
+- Highlighter do VS Code atualizado para `list`, `table`, `add`, `insert`, `size` e destaque de `<` `>` `[` `]`.
+- Exemplo adicionado: `examples/list_table_ok.mint`.
