@@ -69,6 +69,11 @@ class CallExpr(Expr):
 
 
 @dataclass
+class ImportDecl:
+    module_path: str
+
+
+@dataclass
 class StructField:
     name: str
     field_type: MintType
@@ -196,6 +201,7 @@ class FuncDecl:
 # -------------------------
 @dataclass
 class Program:
+    imports: List[ImportDecl]
     structs: List[StructDecl]
     decls: List[VarDeclStmt]
     body: List[Stmt]

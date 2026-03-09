@@ -4,7 +4,7 @@ from .tokens import Token, TokenType
 from .errors import ParserError
 from .ast_nodes import (
     Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ReturnStmt, CallStmt,
-    FuncDecl, FuncParam, StructDecl, StructField,
+    FuncDecl, FuncParam, StructDecl, StructField, ImportDecl,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, FieldAccessExpr, IndexAccessExpr, SizeCall, Binary, Unary, CallExpr, MintType
 )
 
@@ -39,35 +39,56 @@ class Parser:
         self.i = 0
 
     def parse(self) -> Program:
-        self._consume(TokenType.PROGRAM, "Esperado 'program'.")
-        self._consume(TokenType.INIT, "Esperado 'init' após 'program'.")
-        self._consume(TokenType.DOT, "Esperado '.' após 'program init'.")
+        imports: List[ImportDecl] = []
+        while self._check(TokenType.IMPORT):
+            imports.append(self._import_decl())
 
         structs: List[StructDecl] = []
-        decls: List[VarDeclStmt] = []
-        while self._check(TokenType.STRUCT) or self._check(TokenType.VAR):
-            if self._check(TokenType.STRUCT):
-                structs.append(self._struct_decl())
-            else:
-                decls.append(self._vardecl())
-
-        self._consume(TokenType.INITIALIZATION, "Esperado 'initialization'.")
-        self._consume(TokenType.DOT, "Esperado '.' após 'initialization'.")
-
-        body = self._block_until({TokenType.ENDPROGRAM})
-
-        self._consume(TokenType.ENDPROGRAM, "Esperado 'endprogram'.")
-        self._consume(TokenType.DOT, "Esperado '.' após 'endprogram'.")
+        while self._check(TokenType.STRUCT):
+            structs.append(self._struct_decl())
 
         funcs: List[FuncDecl] = []
         while self._check(TokenType.FUNC):
             funcs.append(self._func_decl())
 
+        decls: List[VarDeclStmt] = []
+        body: List[Stmt] = []
+        if self._check(TokenType.PROGRAM):
+            self._consume(TokenType.PROGRAM, "Esperado 'program'.")
+            self._consume(TokenType.INIT, "Esperado 'init' após 'program'.")
+            self._consume(TokenType.DOT, "Esperado '.' após 'program init'.")
+
+            while self._check(TokenType.STRUCT) or self._check(TokenType.VAR):
+                if self._check(TokenType.STRUCT):
+                    structs.append(self._struct_decl())
+                else:
+                    decls.append(self._vardecl())
+
+            self._consume(TokenType.INITIALIZATION, "Esperado 'initialization'.")
+            self._consume(TokenType.DOT, "Esperado '.' após 'initialization'.")
+
+            body = self._block_until({TokenType.ENDPROGRAM})
+
+            self._consume(TokenType.ENDPROGRAM, "Esperado 'endprogram'.")
+            self._consume(TokenType.DOT, "Esperado '.' após 'endprogram'.")
+
+            while self._check(TokenType.FUNC):
+                funcs.append(self._func_decl())
+
         if not self._check(TokenType.EOF):
             t = self._peek()
-            raise ParserError(f"Texto extra após fim do programa em {t.line}:{t.col}")
+            raise ParserError(f"Texto extra após fim do arquivo em {t.line}:{t.col}")
 
-        return Program(structs=structs, decls=decls, body=body, funcs=funcs)
+        return Program(imports=imports, structs=structs, decls=decls, body=body, funcs=funcs)
+
+    def _import_decl(self) -> ImportDecl:
+        self._consume(TokenType.IMPORT, "Esperado 'IMPORT'.")
+        parts = [self._consume(TokenType.IDENT, "Esperado caminho do módulo após IMPORT.").lexeme]
+        while self._check(TokenType.DOT) and self._check_next(TokenType.IDENT):
+            self._advance()
+            parts.append(self._consume(TokenType.IDENT, "Esperado segmento do caminho do módulo.").lexeme)
+        self._consume(TokenType.DOT, "Faltou '.' no fim do IMPORT.")
+        return ImportDecl(module_path=".".join(parts))
 
     def _struct_decl(self) -> StructDecl:
         self._consume(TokenType.STRUCT, "Esperado 'STRUCT'.")
@@ -440,7 +461,8 @@ class Parser:
                 self._consume(TokenType.RBRACKET, "Esperado ']' no acesso por índice.")
                 expr = IndexAccessExpr(base=expr, index=index)
                 continue
-            if self._match(TokenType.DOT):
+            if self._check(TokenType.DOT) and self._check_next(TokenType.IDENT):
+                self._advance()
                 field = self._consume(TokenType.IDENT, "Esperado nome do campo.").lexeme
                 expr = FieldAccessExpr(base=expr, field=field)
                 continue

@@ -3,9 +3,8 @@ from pathlib import Path
 
 from .errors import MintError
 from .interpreter import Interpreter
-from .lexer import Lexer
 from .linter import Linter
-from .parser import Parser
+from .module_loader import ModuleLoader
 
 DEFAULT_TEMPLATE = """program init.
   var message type string = \"Hello, Mint!\".
@@ -25,12 +24,9 @@ def run_file(path: str) -> int:
         print(f"Erro: arquivo não encontrado: {p}")
         return 2
 
-    source = p.read_text(encoding="utf-8")
     try:
-        tokens = Lexer(source).tokenize()
-        program = Parser(tokens).parse()
-
-        issues = Linter().lint(program)
+        program, issues = ModuleLoader(p).load()
+        issues.extend(Linter().lint(program))
         if issues:
             print("LintError: encontrei problemas antes de executar:")
             for i, issue in enumerate(issues, 1):
