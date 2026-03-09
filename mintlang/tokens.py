@@ -74,6 +74,7 @@ class TokenType(Enum):
     RETURNS = auto()
     STRUCT = auto()
     ENDSTRUCT = auto()
+    IMPORT = auto()
     AND = auto()
     OR = auto()
     NOT = auto()

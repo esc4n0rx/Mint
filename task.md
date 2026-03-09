@@ -119,3 +119,16 @@ Registro consolidado das funcionalidades implementadas.
     - mensagens claras para erro de cabeçalho e conversão.
 - Highlighter do VS Code atualizado para destacar `load`, `save`, `export`, `LOAD`, `SAVE`, `EXPORT` e `TO`.
 - Exemplo adicionado: `examples/load_save_export_ok.mint` e arquivos de dados de apoio em `examples/clients.csv` e `examples/clients.txt`.
+
+## 2026-03-09 — Feature: Modularização e Imports
+- Nome: `IMPORT` com resolução de módulos `.mint` por caminho pontuado.
+- Core atualizado com suporte a:
+  - novo token/keyword `IMPORT` no lexer/parser;
+  - imports no topo do arquivo (`IMPORT modulo.caminho.`);
+  - parser aceitando arquivos de módulo sem `program init` (declarações reutilizáveis);
+  - carregador de módulos com resolução `a.b -> a/b.mint`, deduplicação de carga, detecção de circularidade e erro claro para módulo inexistente;
+  - merge de funções e structs importadas no escopo global do arquivo consumidor com validação de colisões pós-import.
+- Linter/validação de carga atualizado para bloquear `IMPORT` fora do topo com mensagem clara.
+- Highlighter do VS Code atualizado para destacar `import/IMPORT`.
+- Exemplos/módulos adicionados para validação real da feature:
+  - `utils/math.mint`, `finance/tax.mint`, `health/imc.mint`, `sales/customer.mint`, `examples/imports_test.mint`.

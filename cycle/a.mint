@@ -1,0 +1,4 @@
+IMPORT cycle.b.
+FUNC a() RETURNS int.
+  RETURN 1.
+ENDFUNC.

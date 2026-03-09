@@ -49,6 +49,8 @@ KEYWORDS = {
     "returns": TokenType.RETURNS,
     "struct": TokenType.STRUCT,
     "endstruct": TokenType.ENDSTRUCT,
+    "import": TokenType.IMPORT,
+    "IMPORT": TokenType.IMPORT,
     "FUNC": TokenType.FUNC,
     "ENDFUNC": TokenType.ENDFUNC,
     "RETURN": TokenType.RETURN,

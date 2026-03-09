@@ -74,7 +74,7 @@
       "patterns": [
         {
           "name": "keyword.control.mint",
-          "match": "\\b(program|init|initialization|endprogram|if|elseif|else|endif|while|endwhile|func|endfunc|return|returns|input|move|to|load|save|export|query|from|where|into|LOAD|SAVE|EXPORT|TO|QUERY|FROM|WHERE|INTO|struct|endstruct|STRUCT|ENDSTRUCT|add|insert|size)\\b"
+          "match": "\\b(program|init|initialization|endprogram|if|elseif|else|endif|while|endwhile|func|endfunc|return|returns|input|move|to|load|save|export|query|from|where|into|LOAD|SAVE|EXPORT|TO|QUERY|FROM|WHERE|INTO|struct|endstruct|STRUCT|ENDSTRUCT|add|insert|size|import|IMPORT)\\b"
         },
         {
           "name": "keyword.operator.logical.mint",
@@ -90,7 +90,7 @@
         },
         {
           "name": "support.function.mint",
-          "match": "\\b(write|input|move|to|load|save|export|query|from|where|into|add|insert|size)\\b"
+          "match": "\\b(write|input|move|to|load|save|export|query|from|where|into|add|insert|size|import|IMPORT)\\b"
         }
       ]
     },
