@@ -4,8 +4,8 @@ import csv
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ReturnStmt, CallStmt,
-    FuncDecl, StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall,
+    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, TryCatchStmt, ReturnStmt, CallStmt,
+    FuncDecl, StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall, CountExpr, SumExpr, AvgExpr,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
 from .errors import RuntimeMintError
@@ -154,6 +154,12 @@ class Interpreter:
             return
         if isinstance(stmt, WhileStmt):
             self._exec_while(stmt)
+            return
+        if isinstance(stmt, ForStmt):
+            self._exec_for(stmt)
+            return
+        if isinstance(stmt, TryCatchStmt):
+            self._exec_try_catch(stmt)
             return
         if isinstance(stmt, ReturnStmt):
             raise ReturnSignal(self._eval(stmt.expr))
@@ -388,6 +394,38 @@ class Interpreter:
             for inner in stmt.body:
                 self._exec_stmt(inner)
 
+    def _exec_for(self, stmt: ForStmt) -> None:
+        collection_val = self._eval(stmt.collection)
+        if not isinstance(collection_val, list):
+            raise RuntimeMintError("FOR exige list<T> ou table<T>.")
+
+        item_type = None
+        if isinstance(stmt.collection, VarRef):
+            collection_type = self._resolve_type(stmt.collection.name)
+            if collection_type is not None:
+                item_type = self._extract_collection_inner(collection_type, "list")
+                if item_type is None:
+                    item_type = self._extract_collection_inner(collection_type, "table")
+        if item_type is None:
+            item_type = "string"
+
+        for item in collection_val:
+            loop_scope = Scope(types={stmt.item_name: item_type}, env={stmt.item_name: self._ensure_type(stmt.item_name, item_type, item)})
+            self._push_scope(loop_scope)
+            try:
+                for inner in stmt.body:
+                    self._exec_stmt(inner)
+            finally:
+                self._pop_scope()
+
+    def _exec_try_catch(self, stmt: TryCatchStmt) -> None:
+        try:
+            for inner in stmt.try_body:
+                self._exec_stmt(inner)
+        except RuntimeMintError:
+            for inner in stmt.catch_body:
+                self._exec_stmt(inner)
+
     def _call_function(self, expr: CallExpr, require_value: bool = True) -> Any:
         func = self.funcs.get(expr.name)
         if func is None:
@@ -470,6 +508,15 @@ class Interpreter:
             if not isinstance(collection, list):
                 raise RuntimeMintError("size() aceita apenas list<T> ou table<T>.")
             return len(collection)
+        if isinstance(expr, CountExpr):
+            collection = self._eval(expr.collection)
+            if not isinstance(collection, list):
+                raise RuntimeMintError("count() aceita apenas list<T> ou table<T>.")
+            return len(collection)
+        if isinstance(expr, SumExpr):
+            return self._eval_aggregation(expr.target, mode="sum")
+        if isinstance(expr, AvgExpr):
+            return self._eval_aggregation(expr.target, mode="avg")
         if isinstance(expr, CallExpr):
             return self._call_function(expr, require_value=True)
 
@@ -516,6 +563,44 @@ class Interpreter:
             raise RuntimeMintError(f"Operador inválido: {expr.op}")
 
         raise RuntimeMintError(f"Expr não suportada: {type(expr).__name__}")
+
+    def _eval_aggregation(self, target: Expr, mode: str) -> Any:
+        values: List[float | int] = []
+
+        if isinstance(target, VarRef):
+            collection = self._resolve_value(target.name)
+            if not isinstance(collection, list):
+                raise RuntimeMintError(f"{mode} exige list<T> ou table<T> como coleção.")
+            for item in collection:
+                if not isinstance(item, (int, float)):
+                    raise RuntimeMintError(f"{mode} exige valores numéricos.")
+                values.append(item)
+        elif isinstance(target, FieldAccessExpr) and isinstance(target.base, VarRef):
+            collection = self._resolve_value(target.base.name)
+            if not isinstance(collection, list):
+                raise RuntimeMintError(f"{mode} exige list<T> ou table<T> como coleção.")
+            for item in collection:
+                if not isinstance(item, dict) or "fields" not in item or target.field not in item["fields"]:
+                    raise RuntimeMintError(f"Campo '{target.field}' não existe na coleção.")
+                value = item["fields"][target.field]
+                if not isinstance(value, (int, float)):
+                    raise RuntimeMintError(f"{mode} exige campo numérico.")
+                values.append(value)
+        else:
+            raise RuntimeMintError(f"{mode} exige coleção ou caminho no formato collection.field.")
+
+        if mode == "sum":
+            total: float | int = 0
+            for value in values:
+                total += value
+            return total
+
+        if len(values) == 0:
+            raise RuntimeMintError("avg não pode ser calculado em coleção vazia.")
+        total = 0.0
+        for value in values:
+            total += float(value)
+        return total / len(values)
 
     def _eval_logical(self, op: str, left: Any, right_expr: Expr) -> bool:
         if not isinstance(left, bool):

@@ -2,8 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 from .ast_nodes import (
-    Program, VarDeclStmt, WriteStmt, AddStmt, InsertStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ReturnStmt, CallStmt, FuncDecl, Stmt,
-    StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall,
+    Program, VarDeclStmt, WriteStmt, AddStmt, InsertStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, TryCatchStmt, ReturnStmt, CallStmt, FuncDecl, Stmt,
+    StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall, CountExpr, SumExpr, AvgExpr,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
 
@@ -289,6 +289,30 @@ class Linter:
                 self._lint_stmt(inner, loop_sym, funcs, structs, issues, current_return)
             return
 
+        if isinstance(stmt, ForStmt):
+            collection_type = self._infer_type(stmt.collection, sym, funcs, structs, issues)
+            item_type = self._extract_collection_inner(collection_type, "list")
+            if item_type is None:
+                item_type = self._extract_collection_inner(collection_type, "table")
+            if item_type is None:
+                if collection_type is not None:
+                    issues.append(LintIssue(f"FOR exige list<T> ou table<T>, mas recebeu {collection_type}."))
+                return
+            for_sym = dict(sym)
+            for_sym[stmt.item_name] = item_type
+            for inner in stmt.body:
+                self._lint_stmt(inner, for_sym, funcs, structs, issues, current_return)
+            return
+
+        if isinstance(stmt, TryCatchStmt):
+            try_sym = dict(sym)
+            for inner in stmt.try_body:
+                self._lint_stmt(inner, try_sym, funcs, structs, issues, current_return)
+            catch_sym = dict(sym)
+            for inner in stmt.catch_body:
+                self._lint_stmt(inner, catch_sym, funcs, structs, issues, current_return)
+            return
+
         if isinstance(stmt, ReturnStmt):
             if current_return is None:
                 issues.append(LintIssue("RETURN fora de função."))
@@ -411,6 +435,16 @@ class Linter:
             if self._extract_collection_inner(collection_type, "list") is None and self._extract_collection_inner(collection_type, "table") is None:
                 issues.append(LintIssue("size() aceita apenas list<T> ou table<T>."))
             return "int"
+        if isinstance(expr, CountExpr):
+            collection_type = self._infer_type(expr.collection, sym, funcs, structs, issues, query_struct_fields, query_struct_name)
+            if self._extract_collection_inner(collection_type, "list") is None and self._extract_collection_inner(collection_type, "table") is None:
+                issues.append(LintIssue("count() aceita apenas list<T> ou table<T>."))
+            return "int"
+        if isinstance(expr, SumExpr):
+            return self._infer_aggregation_type(expr.target, sym, funcs, structs, issues, "sum")
+        if isinstance(expr, AvgExpr):
+            self._infer_aggregation_type(expr.target, sym, funcs, structs, issues, "avg")
+            return "float"
         if isinstance(expr, CallExpr):
             return self._lint_call(expr, sym, funcs, structs, issues, require_value=True)
 
@@ -482,6 +516,59 @@ class Linter:
             return None
 
         issues.append(LintIssue(f"Expressão desconhecida no linter: {type(expr).__name__}"))
+        return None
+
+    def _infer_aggregation_type(
+        self,
+        target: Expr,
+        sym: Dict[str, MintType],
+        funcs: Dict[str, FuncSignature],
+        structs: Dict[str, Dict[str, MintType]],
+        issues: List[LintIssue],
+        op_name: str,
+    ) -> Optional[MintType]:
+        if isinstance(target, VarRef):
+            collection_type = sym.get(target.name)
+            if collection_type is None:
+                issues.append(LintIssue(f"Coleção '{target.name}' não declarada."))
+                return None
+            inner = self._extract_collection_inner(collection_type, "list")
+            if inner is None:
+                inner = self._extract_collection_inner(collection_type, "table")
+            if inner is None:
+                issues.append(LintIssue(f"{op_name} exige list<T> ou table<T> como coleção."))
+                return None
+            if inner not in ("int", "float"):
+                issues.append(LintIssue(f"{op_name} exige campo numérico, mas recebeu {inner}."))
+                return None
+            return inner if op_name == "sum" else "float"
+
+        if isinstance(target, FieldAccessExpr) and isinstance(target.base, VarRef):
+            collection_name = target.base.name
+            collection_type = sym.get(collection_name)
+            if collection_type is None:
+                issues.append(LintIssue(f"Coleção '{collection_name}' não declarada."))
+                return None
+            inner = self._extract_collection_inner(collection_type, "list")
+            if inner is None:
+                inner = self._extract_collection_inner(collection_type, "table")
+            if inner is None:
+                issues.append(LintIssue(f"{op_name} exige list<T> ou table<T> como coleção."))
+                return None
+            struct_fields = structs.get(inner)
+            if struct_fields is None:
+                issues.append(LintIssue(f"{op_name} exige coleção de structs com campo numérico."))
+                return None
+            field_type = struct_fields.get(target.field)
+            if field_type is None:
+                issues.append(LintIssue(f"Campo '{target.field}' não existe na struct '{inner}'."))
+                return None
+            if field_type not in ("int", "float"):
+                issues.append(LintIssue(f"sum exige campo numérico, mas '{target.field}' é {field_type}."))
+                return None
+            return field_type if op_name == "sum" else "float"
+
+        issues.append(LintIssue(f"{op_name} exige coleção ou caminho no formato collection.field."))
         return None
 
     def _lint_call(

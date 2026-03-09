@@ -132,3 +132,14 @@ Registro consolidado das funcionalidades implementadas.
 - Highlighter do VS Code atualizado para destacar `import/IMPORT`.
 - Exemplos/módulos adicionados para validação real da feature:
   - `utils/math.mint`, `finance/tax.mint`, `health/imc.mint`, `sales/customer.mint`, `examples/imports_test.mint`.
+
+## 2026-03-09 — Feature: FOR + Aggregations + TRY/CATCH
+- Nome: `FOR/ENDFOR`, agregações `count/sum/avg` e tratamento de erro `TRY/CATCH/ENDTRY`.
+- Core atualizado com suporte a:
+  - novo loop `FOR item IN collection. ... ENDFOR.` para `list<T>` e `table<T>`, com escopo local da variável de iteração;
+  - novas expressões de agregação `count(collection)`, `sum(collection.field)` e `avg(collection.field)` (com suporte adicional a coleção numérica direta);
+  - novo bloco `TRY. ... CATCH. ... ENDTRY.` para capturar erros de runtime e continuar o fluxo.
+- Linter atualizado para validar coleção iterável no `FOR`, escopo do item de iteração, regras de campo numérico para `sum/avg` e estrutura semântica dos novos blocos.
+- Interpreter atualizado para executar `FOR`, calcular agregações em varredura linear e capturar `RuntimeMintError` em `TRY/CATCH`.
+- Highlighter do VS Code atualizado para destacar `FOR`, `IN`, `ENDFOR`, `TRY`, `CATCH`, `ENDTRY`, `count`, `sum`, `avg`.
+- Exemplos adicionados: `examples/for_numbers.mint`, `examples/for_structs.mint`, `examples/aggregations.mint`, `examples/try_catch_load.mint`, `examples/try_catch_avg.mint`.
