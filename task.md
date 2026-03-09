@@ -99,3 +99,23 @@ Registro consolidado das funcionalidades implementadas.
   avaliando o `WHERE` no contexto do item atual e inserindo itens aprovados no destino.
 - Highlighter do VS Code atualizado para destacar `QUERY`, `FROM`, `WHERE`, `INTO`.
 - Exemplo adicionado: `examples/query_ok.mint`.
+
+## 2026-03-09 — Feature: LOAD / SAVE / EXPORT (CSV e TXT)
+- Nome: `LOAD`, `SAVE`, `EXPORT` para persistência de coleções estruturadas em memória.
+- Core atualizado com suporte a:
+  - novos tokens/keywords `LOAD`, `SAVE`, `EXPORT` e reutilização de `TO`/`INTO`;
+  - parser para statements:
+    - `LOAD "path" INTO colecao.`
+    - `SAVE colecao TO "path".`
+    - `EXPORT colecao TO "path".`
+  - novos nós AST `LoadStmt`, `SaveStmt`, `ExportStmt`;
+  - linter para validar existência e compatibilidade da coleção (`table<Struct>` ou `list<Struct>`), com path em string literal;
+  - interpreter com leitura/escrita linear de arquivos delimitados:
+    - `.csv` com `,`
+    - `.txt` com `;`
+    - cabeçalho obrigatório e mapeamento por nome de coluna
+    - conversão tipada (`int`, `float`, `string`, `char`, `bool`)
+    - LOAD substitui o conteúdo da coleção alvo (sem append automático)
+    - mensagens claras para erro de cabeçalho e conversão.
+- Highlighter do VS Code atualizado para destacar `load`, `save`, `export`, `LOAD`, `SAVE`, `EXPORT` e `TO`.
+- Exemplo adicionado: `examples/load_save_export_ok.mint` e arquivos de dados de apoio em `examples/clients.csv` e `examples/clients.txt`.
