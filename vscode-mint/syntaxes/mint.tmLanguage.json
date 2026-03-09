@@ -16,6 +16,9 @@
       "include": "#types"
     },
     {
+      "include": "#fieldAccess"
+    },
+    {
       "include": "#booleans"
     },
     {
@@ -71,7 +74,7 @@
       "patterns": [
         {
           "name": "keyword.control.mint",
-          "match": "\\b(program|init|initialization|endprogram|if|elseif|else|endif|while|endwhile|func|endfunc|return|returns|input|move|to)\\b"
+          "match": "\\b(program|init|initialization|endprogram|if|elseif|else|endif|while|endwhile|func|endfunc|return|returns|input|move|to|struct|endstruct|STRUCT|ENDSTRUCT)\\b"
         },
         {
           "name": "keyword.operator.logical.mint",
@@ -96,6 +99,22 @@
         {
           "name": "storage.type.mint",
           "match": "\\b(int|string|bool|float|char)\\b"
+        }
+      ]
+    },
+    "fieldAccess": {
+      "patterns": [
+        {
+          "name": "meta.field.access.mint",
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\.([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": {
+              "name": "variable.other.mint"
+            },
+            "2": {
+              "name": "variable.other.property.mint"
+            }
+          }
         }
       ]
     },

@@ -51,3 +51,23 @@ Registro consolidado das funcionalidades implementadas.
 - Scripts de fallback adicionados para execução sem PATH:
   - `run.sh`, `run.command`, `run.bat`
 - Exemplo novo: `examples/HelloWorld.mint`.
+
+## 2026-03-09 — Feature `STRUCT`
+- Core da linguagem atualizado com suporte a:
+  - definição de `STRUCT ... ENDSTRUCT` com campos tipados (`campo type tipo.`);
+  - declaração de variável com tipo de struct (`var client type Client.`);
+  - acesso a campos com dot notation (`client.name`) em expressões, `write`, `if`, `while`, `input` e funções;
+  - atribuição em campos (`client.age = 25.`) com validação de tipo e regra existente de widening `int -> float`.
+- Linter atualizado para validar:
+  - struct duplicada;
+  - campo duplicado na mesma struct;
+  - tipo inválido de campo;
+  - uso de struct não declarada em variáveis/parâmetros;
+  - acesso a campo inexistente;
+  - atribuição incompatível em campo.
+- Interpreter atualizado para:
+  - registrar structs antes da execução;
+  - instanciar structs com valores padrão por tipo;
+  - permitir leitura/escrita de campos e `input` em campos.
+- Highlighter do VS Code atualizado em `vscode-mint/syntaxes/mint.tmLanguage.json` para destacar `STRUCT`, `ENDSTRUCT` e acessos com `.`.
+- Exemplo adicionado: `examples/struct_ok.mint`.
