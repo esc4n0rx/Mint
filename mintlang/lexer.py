@@ -17,11 +17,16 @@ KEYWORDS = {
     "bool": TokenType.BOOL_T,
     "float": TokenType.FLOAT_T,
     "char": TokenType.CHAR_T,
+    "list": TokenType.LIST,
+    "table": TokenType.TABLE,
 
     "true": TokenType.TRUE,
     "false": TokenType.FALSE,
 
     "write": TokenType.WRITE,
+    "add": TokenType.ADD,
+    "insert": TokenType.INSERT,
+    "size": TokenType.SIZE,
     "input": TokenType.INPUT,
     "move": TokenType.MOVE,
     "to": TokenType.TO,
@@ -160,6 +165,8 @@ class Lexer:
                 "/": TokenType.SLASH,
                 "(": TokenType.LPAREN,
                 ")": TokenType.RPAREN,
+                "[": TokenType.LBRACKET,
+                "]": TokenType.RBRACKET,
                 ".": TokenType.DOT,
                 ",": TokenType.COMMA,
             }

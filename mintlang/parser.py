@@ -3,9 +3,9 @@ from typing import List, Optional
 from .tokens import Token, TokenType
 from .errors import ParserError
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, InputStmt, MoveStmt, WhileStmt, ReturnStmt, CallStmt,
+    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, InputStmt, MoveStmt, WhileStmt, ReturnStmt, CallStmt,
     FuncDecl, FuncParam, StructDecl, StructField,
-    Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, FieldAccessExpr, Binary, Unary, CallExpr, MintType
+    Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, FieldAccessExpr, IndexAccessExpr, SizeCall, Binary, Unary, CallExpr, MintType
 )
 
 class Parser:
@@ -129,6 +129,16 @@ class Parser:
         return VarDeclStmt(name=name, vartype=vartype, initializer=initializer)
 
     def _parse_type(self) -> MintType:
+        if self._match(TokenType.LIST):
+            self._consume(TokenType.LT, "Esperado '<' após list.")
+            inner = self._parse_type()
+            self._consume(TokenType.GT, "Esperado '>' após tipo de list.")
+            return f"list<{inner}>"
+        if self._match(TokenType.TABLE):
+            self._consume(TokenType.LT, "Esperado '<' após table.")
+            inner = self._parse_type()
+            self._consume(TokenType.GT, "Esperado '>' após tipo de table.")
+            return f"table<{inner}>"
         if self._check(TokenType.IDENT):
             return self._advance().lexeme
         return self._parse_primitive_type()
@@ -157,6 +167,24 @@ class Parser:
             self._consume(TokenType.RPAREN, "Esperado ')' após expressão do write.")
             self._consume(TokenType.DOT, "Faltou '.' no fim do write.")
             return WriteStmt(expr)
+
+        if self._match(TokenType.ADD):
+            self._consume(TokenType.LPAREN, "Esperado '(' após add.")
+            collection = self._expression()
+            self._consume(TokenType.COMMA, "Esperado ',' em add(collection, valor).")
+            value = self._expression()
+            self._consume(TokenType.RPAREN, "Esperado ')' após add.")
+            self._consume(TokenType.DOT, "Faltou '.' no fim do add.")
+            return AddStmt(collection=collection, value=value)
+
+        if self._match(TokenType.INSERT):
+            self._consume(TokenType.LPAREN, "Esperado '(' após insert.")
+            table = self._expression()
+            self._consume(TokenType.COMMA, "Esperado ',' em insert(table, registro).")
+            value = self._expression()
+            self._consume(TokenType.RPAREN, "Esperado ')' após insert.")
+            self._consume(TokenType.DOT, "Faltou '.' no fim do insert.")
+            return InsertStmt(table=table, value=value)
 
         if self._match(TokenType.INPUT):
             self._consume(TokenType.LPAREN, "Esperado '(' após input.")
@@ -346,6 +374,12 @@ class Parser:
         if self._match(TokenType.FALSE):
             return BoolLit(False)
 
+        if self._match(TokenType.SIZE):
+            self._consume(TokenType.LPAREN, "Esperado '(' após size.")
+            collection = self._expression()
+            self._consume(TokenType.RPAREN, "Esperado ')' após size(collection).")
+            return SizeCall(collection=collection)
+
         if self._match(TokenType.IDENT):
             name = self._previous().lexeme
             if self._match(TokenType.LPAREN):
@@ -357,9 +391,7 @@ class Parser:
                 self._consume(TokenType.RPAREN, "Esperado ')' após argumentos da chamada.")
                 return CallExpr(name=name, args=args)
             expr: Expr = VarRef(name)
-            while self._match(TokenType.DOT):
-                field = self._consume(TokenType.IDENT, "Esperado nome do campo.").lexeme
-                expr = FieldAccessExpr(base=expr, field=field)
+            expr = self._parse_postfix(expr)
             return expr
 
         if self._match(TokenType.LPAREN):
@@ -369,6 +401,20 @@ class Parser:
 
         t = self._peek()
         raise ParserError(f"Esperada expressão, achei '{t.lexeme}' em {t.line}:{t.col}")
+
+    def _parse_postfix(self, expr: Expr) -> Expr:
+        while True:
+            if self._match(TokenType.LBRACKET):
+                index = self._expression()
+                self._consume(TokenType.RBRACKET, "Esperado ']' no acesso por índice.")
+                expr = IndexAccessExpr(base=expr, index=index)
+                continue
+            if self._match(TokenType.DOT):
+                field = self._consume(TokenType.IDENT, "Esperado nome do campo.").lexeme
+                expr = FieldAccessExpr(base=expr, field=field)
+                continue
+            break
+        return expr
 
     # -------------------------
     # Helpers
