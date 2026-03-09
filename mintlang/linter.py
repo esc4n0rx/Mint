@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 from .ast_nodes import (
-    Program, VarDeclStmt, WriteStmt, AddStmt, InsertStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, WhileStmt, ReturnStmt, CallStmt, FuncDecl, Stmt,
+    Program, VarDeclStmt, WriteStmt, AddStmt, InsertStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ReturnStmt, CallStmt, FuncDecl, Stmt,
     StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
@@ -192,6 +192,33 @@ class Linter:
                 ))
             return
 
+
+        if isinstance(stmt, LoadStmt):
+            dest_type = sym.get(stmt.destination)
+            if dest_type is None:
+                issues.append(LintIssue(f"Coleção '{stmt.destination}' não declarada."))
+                return
+            if not self._is_struct_collection(dest_type, structs):
+                issues.append(LintIssue("LOAD exige variável do tipo table<Struct> ou list<Struct>."))
+            return
+
+        if isinstance(stmt, SaveStmt):
+            source_type = sym.get(stmt.source)
+            if source_type is None:
+                issues.append(LintIssue(f"Coleção '{stmt.source}' não declarada."))
+                return
+            if not self._is_struct_collection(source_type, structs):
+                issues.append(LintIssue("SAVE exige variável do tipo table<Struct> ou list<Struct>."))
+            return
+
+        if isinstance(stmt, ExportStmt):
+            source_type = sym.get(stmt.source)
+            if source_type is None:
+                issues.append(LintIssue(f"Coleção '{stmt.source}' não declarada."))
+                return
+            if not self._is_struct_collection(source_type, structs):
+                issues.append(LintIssue("EXPORT exige variável do tipo table<Struct> ou list<Struct>."))
+            return
         if isinstance(stmt, QueryStmt):
             source_type = sym.get(stmt.source)
             if source_type is None:
@@ -525,6 +552,12 @@ class Linter:
                 return f"Tipo '{table_inner}' não existe."
             return None
         return value_type
+
+    def _is_struct_collection(self, value_type: Optional[MintType], structs: Dict[str, Dict[str, MintType]]) -> bool:
+        inner = self._extract_collection_inner(value_type, "table")
+        if inner is None:
+            inner = self._extract_collection_inner(value_type, "list")
+        return inner is not None and inner in structs
 
     def _extract_collection_inner(self, value_type: Optional[MintType], collection_name: str) -> Optional[MintType]:
         if value_type is None:

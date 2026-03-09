@@ -1,8 +1,10 @@
 from __future__ import annotations
 from dataclasses import dataclass
+import csv
 from typing import Dict, Any, Optional, List
+from pathlib import Path
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, WhileStmt, ReturnStmt, CallStmt,
+    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ReturnStmt, CallStmt,
     FuncDecl, StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
@@ -141,6 +143,15 @@ class Interpreter:
         if isinstance(stmt, QueryStmt):
             self._exec_query(stmt)
             return
+        if isinstance(stmt, LoadStmt):
+            self._exec_load(stmt)
+            return
+        if isinstance(stmt, SaveStmt):
+            self._exec_save(stmt.source, stmt.path)
+            return
+        if isinstance(stmt, ExportStmt):
+            self._exec_save(stmt.source, stmt.path)
+            return
         if isinstance(stmt, WhileStmt):
             self._exec_while(stmt)
             return
@@ -188,6 +199,125 @@ class Interpreter:
                 raise RuntimeMintError("WHERE da QUERY deve resultar em bool.")
             if cond_val:
                 dest_val.append(item)
+
+    def _exec_load(self, stmt: LoadStmt) -> None:
+        collection_type = self._resolve_type(stmt.destination)
+        if collection_type is None:
+            raise RuntimeMintError(f"Coleção '{stmt.destination}' não declarada.")
+
+        struct_name = self._extract_collection_inner(collection_type, "table")
+        if struct_name is None:
+            struct_name = self._extract_collection_inner(collection_type, "list")
+        if struct_name is None or struct_name not in self.structs:
+            raise RuntimeMintError("LOAD exige variável do tipo table<Struct> ou list<Struct>.")
+
+        delimiter = self._delimiter_for_path(stmt.path)
+        rows = self._read_delimited_file(stmt.path, delimiter)
+        header = rows[0] if rows else []
+        self._validate_header(struct_name, header)
+
+        loaded: List[Any] = []
+        for row in rows[1:]:
+            loaded.append(self._row_to_struct(struct_name, header, row))
+
+        self._assign_value(stmt.destination, loaded)
+
+    def _exec_save(self, source: str, path: str) -> None:
+        collection_type = self._resolve_type(source)
+        if collection_type is None:
+            raise RuntimeMintError(f"Coleção '{source}' não declarada.")
+
+        struct_name = self._extract_collection_inner(collection_type, "table")
+        if struct_name is None:
+            struct_name = self._extract_collection_inner(collection_type, "list")
+        if struct_name is None or struct_name not in self.structs:
+            raise RuntimeMintError("SAVE/EXPORT exige variável do tipo table<Struct> ou list<Struct>.")
+
+        collection = self._resolve_value(source)
+        if not isinstance(collection, list):
+            raise RuntimeMintError("Coleção inválida para SAVE/EXPORT.")
+
+        fields = list(self.structs[struct_name].keys())
+        delimiter = self._delimiter_for_path(path)
+        output_path = Path(path)
+        if output_path.parent != Path('.'):
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with output_path.open('w', encoding='utf-8', newline='') as f:
+            writer = csv.writer(f, delimiter=delimiter)
+            writer.writerow(fields)
+            for item in collection:
+                if not isinstance(item, dict) or item.get('__struct__') != struct_name or 'fields' not in item:
+                    raise RuntimeMintError("Coleção contém item inválido para serialização.")
+                writer.writerow([self._serialize_field(item['fields'][name]) for name in fields])
+
+    def _delimiter_for_path(self, path: str) -> str:
+        suffix = Path(path).suffix.lower()
+        if suffix == '.csv':
+            return ','
+        if suffix == '.txt':
+            return ';'
+        raise RuntimeMintError("Formato de arquivo não suportado. Use .csv ou .txt.")
+
+    def _read_delimited_file(self, path: str, delimiter: str) -> List[List[str]]:
+        input_path = Path(path)
+        if not input_path.exists():
+            raise RuntimeMintError(f"Arquivo não encontrado: {path}")
+        with input_path.open('r', encoding='utf-8', newline='') as f:
+            reader = csv.reader(f, delimiter=delimiter)
+            return [row for row in reader if row]
+
+    def _validate_header(self, struct_name: str, header: List[str]) -> None:
+        fields = self.structs[struct_name]
+        expected = list(fields.keys())
+        missing = [name for name in expected if name not in header]
+        extra = [name for name in header if name not in fields]
+        if missing or extra:
+            parts: List[str] = []
+            if missing:
+                parts.append(f"faltando colunas: {', '.join(missing)}")
+            if extra:
+                parts.append(f"colunas desconhecidas: {', '.join(extra)}")
+            raise RuntimeMintError(f"Cabeçalho incompatível para struct '{struct_name}': " + '; '.join(parts))
+
+    def _row_to_struct(self, struct_name: str, header: List[str], row: List[str]) -> Dict[str, Any]:
+        fields = self.structs[struct_name]
+        data: Dict[str, Any] = {}
+        for field_name, field_type in fields.items():
+            idx = header.index(field_name)
+            raw = row[idx] if idx < len(row) else ''
+            data[field_name] = self._convert_loaded_value(raw, field_type, field_name)
+        return {'__struct__': struct_name, 'fields': data}
+
+    def _convert_loaded_value(self, raw: str, field_type: MintType, field_name: str) -> Any:
+        if field_type == 'string':
+            return raw
+        if field_type == 'int':
+            try:
+                return int(raw)
+            except ValueError:
+                raise RuntimeMintError(f"valor '{raw}' para campo {field_name} type int")
+        if field_type == 'float':
+            try:
+                return float(raw)
+            except ValueError:
+                raise RuntimeMintError(f"valor '{raw}' para campo {field_name} type float")
+        if field_type == 'bool':
+            if raw == 'true':
+                return True
+            if raw == 'false':
+                return False
+            raise RuntimeMintError(f"valor '{raw}' para campo {field_name} type bool")
+        if field_type == 'char':
+            if len(raw) != 1:
+                raise RuntimeMintError(f"valor '{raw}' para campo {field_name} type char")
+            return raw
+        raise RuntimeMintError(f"Tipo não suportado para LOAD: {field_type}.")
+
+    def _serialize_field(self, val: Any) -> str:
+        if isinstance(val, bool):
+            return 'true' if val else 'false'
+        return str(val)
 
     def _resolve_input_target(self, target: Expr) -> tuple[str, MintType]:
         if isinstance(target, VarRef):

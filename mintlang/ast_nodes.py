@@ -149,6 +149,21 @@ class QueryStmt(Stmt):
     destination: str
 
 @dataclass
+class LoadStmt(Stmt):
+    path: str
+    destination: str
+
+@dataclass
+class SaveStmt(Stmt):
+    source: str
+    path: str
+
+@dataclass
+class ExportStmt(Stmt):
+    source: str
+    path: str
+
+@dataclass
 class WhileStmt(Stmt):
     condition: Expr
     body: List[Stmt]
