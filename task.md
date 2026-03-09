@@ -82,3 +82,20 @@ Registro consolidado das funcionalidades implementadas.
   - leitura de campos em registros indexados (ex.: `clients[0].name`).
 - Highlighter do VS Code atualizado para `list`, `table`, `add`, `insert`, `size` e destaque de `<` `>` `[` `]`.
 - Exemplo adicionado: `examples/list_table_ok.mint`.
+
+## 2026-03-09 — Feature: QUERY em memória
+- Nome: `QUERY FROM ... WHERE ... INTO ...`.
+- Core atualizado com suporte a:
+  - novos tokens/keywords `QUERY`, `FROM`, `WHERE`, `INTO`;
+  - parser para statement `QUERY FROM <origem> WHERE <expr> INTO <destino>.`;
+  - novo nó AST `QueryStmt`.
+- Linter atualizado para validar:
+  - existência da origem e do destino;
+  - origem como `list<Struct>` ou `table<Struct>`;
+  - compatibilidade de tipos entre origem e destino;
+  - resolução de campos implícitos dentro do `WHERE` com validação contra a struct da origem;
+  - resultado booleano obrigatório no `WHERE`.
+- Interpreter atualizado para executar QUERY em varredura linear em memória,
+  avaliando o `WHERE` no contexto do item atual e inserindo itens aprovados no destino.
+- Highlighter do VS Code atualizado para destacar `QUERY`, `FROM`, `WHERE`, `INTO`.
+- Exemplo adicionado: `examples/query_ok.mint`.

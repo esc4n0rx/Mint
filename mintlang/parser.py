@@ -3,7 +3,7 @@ from typing import List, Optional
 from .tokens import Token, TokenType
 from .errors import ParserError
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, InputStmt, MoveStmt, WhileStmt, ReturnStmt, CallStmt,
+    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, InputStmt, MoveStmt, QueryStmt, WhileStmt, ReturnStmt, CallStmt,
     FuncDecl, FuncParam, StructDecl, StructField,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, FieldAccessExpr, IndexAccessExpr, SizeCall, Binary, Unary, CallExpr, MintType
 )
@@ -200,6 +200,16 @@ class Parser:
             self._consume(TokenType.DOT, "Faltou '.' no fim do move.")
             return MoveStmt(source=source, target=target)
 
+        if self._match(TokenType.QUERY):
+            self._consume(TokenType.FROM, "Esperado 'FROM' após QUERY.")
+            source = self._consume(TokenType.IDENT, "Esperado nome da coleção de origem.").lexeme
+            self._consume(TokenType.WHERE, "Esperado 'WHERE' na QUERY.")
+            condition = self._expression()
+            self._consume(TokenType.INTO, "Esperado 'INTO' na QUERY.")
+            destination = self._consume(TokenType.IDENT, "Esperado nome da coleção de destino.").lexeme
+            self._consume(TokenType.DOT, "Faltou '.' no fim da QUERY.")
+            return QueryStmt(source=source, condition=condition, destination=destination)
+
         if self._match(TokenType.IF):
             return self._if_stmt()
 
@@ -304,7 +314,7 @@ class Parser:
     def _or(self) -> Expr:
         expr = self._and()
         while self._match(TokenType.OR):
-            op = self._previous().lexeme
+            op = self._previous().lexeme.lower()
             right = self._and()
             expr = Binary(expr, op, right)
         return expr
@@ -312,14 +322,14 @@ class Parser:
     def _and(self) -> Expr:
         expr = self._not()
         while self._match(TokenType.AND):
-            op = self._previous().lexeme
+            op = self._previous().lexeme.lower()
             right = self._not()
             expr = Binary(expr, op, right)
         return expr
 
     def _not(self) -> Expr:
         if self._match(TokenType.NOT):
-            op = self._previous().lexeme
+            op = self._previous().lexeme.lower()
             right = self._not()
             return Unary(op, right)
         return self._comparison()
