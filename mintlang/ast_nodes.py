@@ -51,6 +51,21 @@ class IndexAccessExpr(Expr):
 class SizeCall(Expr):
     collection: Expr
 
+
+@dataclass
+class CountExpr(Expr):
+    collection: Expr
+
+
+@dataclass
+class SumExpr(Expr):
+    target: Expr
+
+
+@dataclass
+class AvgExpr(Expr):
+    target: Expr
+
 @dataclass
 class Binary(Expr):
     left: Expr
@@ -172,6 +187,19 @@ class ExportStmt(Stmt):
 class WhileStmt(Stmt):
     condition: Expr
     body: List[Stmt]
+
+
+@dataclass
+class ForStmt(Stmt):
+    item_name: str
+    collection: Expr
+    body: List[Stmt]
+
+
+@dataclass
+class TryCatchStmt(Stmt):
+    try_body: List[Stmt]
+    catch_body: List[Stmt]
 
 @dataclass
 class ReturnStmt(Stmt):

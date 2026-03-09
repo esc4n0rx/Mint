@@ -3,9 +3,9 @@ from typing import List, Optional
 from .tokens import Token, TokenType
 from .errors import ParserError
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ReturnStmt, CallStmt,
+    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, TryCatchStmt, ReturnStmt, CallStmt,
     FuncDecl, FuncParam, StructDecl, StructField, ImportDecl,
-    Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, FieldAccessExpr, IndexAccessExpr, SizeCall, Binary, Unary, CallExpr, MintType
+    Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, FieldAccessExpr, IndexAccessExpr, SizeCall, CountExpr, SumExpr, AvgExpr, Binary, Unary, CallExpr, MintType
 )
 
 class Parser:
@@ -258,6 +258,12 @@ class Parser:
         if self._match(TokenType.WHILE):
             return self._while_stmt()
 
+        if self._match(TokenType.FOR):
+            return self._for_stmt()
+
+        if self._match(TokenType.TRY):
+            return self._try_catch_stmt()
+
         if self._match(TokenType.RETURN):
             expr = self._expression()
             self._consume(TokenType.DOT, "Faltou '.' no fim do return.")
@@ -301,6 +307,26 @@ class Parser:
         self._consume(TokenType.ENDWHILE, "Esperado 'endwhile'.")
         self._consume(TokenType.DOT, "Faltou '.' após endwhile.")
         return WhileStmt(condition, body)
+
+    def _for_stmt(self) -> ForStmt:
+        item_name = self._consume(TokenType.IDENT, "Esperado variável de iteração no FOR.").lexeme
+        self._consume(TokenType.IN, "Esperado 'IN' no FOR.")
+        collection = self._expression()
+        self._consume(TokenType.DOT, "Faltou '.' após cabeçalho do FOR.")
+        body = self._block_until({TokenType.ENDFOR})
+        self._consume(TokenType.ENDFOR, "Esperado 'ENDFOR'.")
+        self._consume(TokenType.DOT, "Faltou '.' após ENDFOR.")
+        return ForStmt(item_name=item_name, collection=collection, body=body)
+
+    def _try_catch_stmt(self) -> TryCatchStmt:
+        self._consume(TokenType.DOT, "Faltou '.' após TRY.")
+        try_body = self._block_until({TokenType.CATCH})
+        self._consume(TokenType.CATCH, "TRY sem CATCH não é permitido.")
+        self._consume(TokenType.DOT, "Faltou '.' após CATCH.")
+        catch_body = self._block_until({TokenType.ENDTRY})
+        self._consume(TokenType.ENDTRY, "ENDTRY esperado.")
+        self._consume(TokenType.DOT, "Faltou '.' após ENDTRY.")
+        return TryCatchStmt(try_body=try_body, catch_body=catch_body)
 
     def _call_expr(self) -> CallExpr:
         name = self._consume(TokenType.IDENT, "Esperado nome da função.").lexeme
@@ -431,6 +457,24 @@ class Parser:
             collection = self._expression()
             self._consume(TokenType.RPAREN, "Esperado ')' após size(collection).")
             return SizeCall(collection=collection)
+
+        if self._match(TokenType.COUNT):
+            self._consume(TokenType.LPAREN, "Esperado '(' após count.")
+            collection = self._expression()
+            self._consume(TokenType.RPAREN, "Esperado ')' após count(collection).")
+            return CountExpr(collection=collection)
+
+        if self._match(TokenType.SUM):
+            self._consume(TokenType.LPAREN, "Esperado '(' após sum.")
+            target = self._expression()
+            self._consume(TokenType.RPAREN, "Esperado ')' após sum(...).")
+            return SumExpr(target=target)
+
+        if self._match(TokenType.AVG):
+            self._consume(TokenType.LPAREN, "Esperado '(' após avg.")
+            target = self._expression()
+            self._consume(TokenType.RPAREN, "Esperado ')' após avg(...).")
+            return AvgExpr(target=target)
 
         if self._match(TokenType.IDENT):
             name = self._previous().lexeme

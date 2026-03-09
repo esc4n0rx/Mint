@@ -43,6 +43,15 @@ KEYWORDS = {
     "endif": TokenType.ENDIF,
     "while": TokenType.WHILE,
     "endwhile": TokenType.ENDWHILE,
+    "for": TokenType.FOR,
+    "in": TokenType.IN,
+    "endfor": TokenType.ENDFOR,
+    "try": TokenType.TRY,
+    "catch": TokenType.CATCH,
+    "endtry": TokenType.ENDTRY,
+    "count": TokenType.COUNT,
+    "sum": TokenType.SUM,
+    "avg": TokenType.AVG,
     "func": TokenType.FUNC,
     "endfunc": TokenType.ENDFUNC,
     "return": TokenType.RETURN,
@@ -71,6 +80,12 @@ KEYWORDS = {
     "AND": TokenType.AND,
     "OR": TokenType.OR,
     "NOT": TokenType.NOT,
+    "FOR": TokenType.FOR,
+    "IN": TokenType.IN,
+    "ENDFOR": TokenType.ENDFOR,
+    "TRY": TokenType.TRY,
+    "CATCH": TokenType.CATCH,
+    "ENDTRY": TokenType.ENDTRY,
 }
 
 class Lexer:
