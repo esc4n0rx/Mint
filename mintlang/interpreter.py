@@ -3,7 +3,8 @@ from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
 from .ast_nodes import (
     Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, WhileStmt, ReturnStmt, CallStmt,
-    FuncDecl, Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
+    FuncDecl, StructDecl, FieldAccessExpr,
+    Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
 from .errors import RuntimeMintError
 
@@ -32,8 +33,12 @@ class Interpreter:
         self.globals = Scope(types={}, env={})
         self.scopes: List[Scope] = [self.globals]
         self.funcs: Dict[str, FuncDecl] = {}
+        self.structs: Dict[str, Dict[str, MintType]] = {}
 
     def run(self, program: Program) -> None:
+        for struct in program.structs:
+            self._register_struct(struct)
+
         for func in program.funcs:
             self.funcs[func.name] = func
 
@@ -42,6 +47,12 @@ class Interpreter:
 
         for stmt in program.body:
             self._exec_stmt(stmt)
+
+    def _register_struct(self, decl: StructDecl) -> None:
+        fields: Dict[str, MintType] = {}
+        for field in decl.fields:
+            fields[field.name] = field.field_type
+        self.structs[decl.name] = fields
 
     def _current_scope(self) -> Scope:
         return self.scopes[-1]
@@ -80,7 +91,7 @@ class Interpreter:
         scope.types[decl.name] = decl.vartype
 
         if decl.initializer is None:
-            scope.env[decl.name] = DEFAULTS[decl.vartype]
+            scope.env[decl.name] = self._default_value_for_type(decl.vartype)
             return
 
         val = self._eval(decl.initializer)
@@ -101,18 +112,22 @@ class Interpreter:
             self._exec_if(stmt)
             return
         if isinstance(stmt, AssignStmt):
-            self._assign_value(stmt.name, self._eval(stmt.expr))
+            value = self._eval(stmt.expr)
+            if isinstance(stmt.target, VarRef):
+                self._assign_value(stmt.target.name, value)
+            elif isinstance(stmt.target, FieldAccessExpr):
+                self._assign_field_value(stmt.target, value)
+            else:
+                raise RuntimeMintError("Destino de atribuição inválido.")
             return
         if isinstance(stmt, InputStmt):
-            if not isinstance(stmt.target, VarRef):
-                raise RuntimeMintError("input aceita apenas referência de variável.")
-            name = stmt.target.name
-            var_type = self._resolve_type(name)
-            if var_type is None:
-                raise RuntimeMintError(f"Variável '{name}' não declarada.")
+            target_name, var_type = self._resolve_input_target(stmt.target)
             raw = input()
-            parsed = self._parse_input_value(name, var_type, raw)
-            self._assign_value(name, parsed)
+            parsed = self._parse_input_value(target_name, var_type, raw)
+            if isinstance(stmt.target, VarRef):
+                self._assign_value(stmt.target.name, parsed)
+            else:
+                self._assign_field_value(stmt.target, parsed)
             return
         if isinstance(stmt, MoveStmt):
             self._assign_value(stmt.target, self._eval(stmt.source))
@@ -124,6 +139,52 @@ class Interpreter:
             raise ReturnSignal(self._eval(stmt.expr))
 
         raise RuntimeMintError(f"Stmt não suportado: {type(stmt).__name__}")
+
+    def _resolve_input_target(self, target: Expr) -> tuple[str, MintType]:
+        if isinstance(target, VarRef):
+            var_type = self._resolve_type(target.name)
+            if var_type is None:
+                raise RuntimeMintError(f"Variável '{target.name}' não declarada.")
+            return target.name, var_type
+        if isinstance(target, FieldAccessExpr):
+            field_type = self._resolve_field_type(target)
+            return target.field, field_type
+        raise RuntimeMintError("input aceita apenas referência de variável ou campo.")
+
+    def _resolve_field_type(self, expr: FieldAccessExpr) -> MintType:
+        if not isinstance(expr.base, VarRef):
+            raise RuntimeMintError("Acesso de campo inválido.")
+        base_type = self._resolve_type(expr.base.name)
+        if base_type is None:
+            raise RuntimeMintError(f"Variável '{expr.base.name}' não declarada.")
+        fields = self.structs.get(base_type)
+        if fields is None:
+            raise RuntimeMintError(f"Tipo '{base_type}' não é struct.")
+        field_type = fields.get(expr.field)
+        if field_type is None:
+            raise RuntimeMintError(f"Campo '{expr.field}' não existe na struct '{base_type}'.")
+        return field_type
+
+    def _resolve_field_ref(self, expr: FieldAccessExpr) -> tuple[Dict[str, Any], MintType, str]:
+        if not isinstance(expr.base, VarRef):
+            raise RuntimeMintError("Acesso de campo inválido.")
+        base_name = expr.base.name
+        base_value = self._resolve_value(base_name)
+        base_type = self._resolve_type(base_name)
+        if base_type is None:
+            raise RuntimeMintError(f"Variável '{base_name}' não declarada.")
+        fields = self.structs.get(base_type)
+        if fields is None:
+            raise RuntimeMintError(f"Tipo '{base_type}' não é struct.")
+        if expr.field not in fields:
+            raise RuntimeMintError(f"Campo '{expr.field}' não existe na struct '{base_type}'.")
+        if not isinstance(base_value, dict) or "fields" not in base_value:
+            raise RuntimeMintError(f"Valor de '{base_name}' não é uma instância de struct válida.")
+        return base_value["fields"], fields[expr.field], expr.field
+
+    def _assign_field_value(self, expr: FieldAccessExpr, value: Any) -> None:
+        field_map, field_type, field_name = self._resolve_field_ref(expr)
+        field_map[field_name] = self._ensure_type(field_name, field_type, value)
 
     def _exec_if(self, stmt: IfStmt) -> None:
         for branch in stmt.branches:
@@ -169,39 +230,43 @@ class Interpreter:
         try:
             for st in func.body:
                 self._exec_stmt(st)
-        except ReturnSignal as signal:
+            if func.return_type is not None:
+                raise RuntimeMintError(f"Função '{func.name}' deveria retornar {func.return_type}, mas terminou sem RETURN.")
+            return None
+        except ReturnSignal as rs:
             if func.return_type is None:
-                raise RuntimeMintError(f"Função '{func.name}' não declara RETURNS e não pode retornar valor.")
-            return self._ensure_type(func.name, func.return_type, signal.value)
+                raise RuntimeMintError(f"Função '{func.name}' não declara retorno, mas executou RETURN.")
+            return self._ensure_type(f"return({func.name})", func.return_type, rs.value)
         finally:
             self._pop_scope()
 
-        if func.return_type is not None:
-            raise RuntimeMintError(f"Função '{func.name}' deveria retornar {func.return_type}.")
-
-        if require_value:
-            raise RuntimeMintError(f"Função '{func.name}' não retorna valor e não pode ser usada em expressão.")
-        return None
+    def _default_value_for_type(self, mint_type: MintType) -> Any:
+        if mint_type in DEFAULTS:
+            return DEFAULTS[mint_type]
+        struct_fields = self.structs.get(mint_type)
+        if struct_fields is None:
+            raise RuntimeMintError(f"Tipo não suportado: {mint_type}.")
+        values: Dict[str, Any] = {}
+        for field_name, field_type in struct_fields.items():
+            values[field_name] = self._default_value_for_type(field_type)
+        return {"__struct__": mint_type, "fields": values}
 
     def _eval(self, expr: Expr) -> Any:
         if isinstance(expr, IntLit):
             return expr.value
-
         if isinstance(expr, FloatLit):
             return expr.value
-
         if isinstance(expr, StringLit):
             return expr.value
-
         if isinstance(expr, CharLit):
             return expr.value
-
         if isinstance(expr, BoolLit):
             return expr.value
-
         if isinstance(expr, VarRef):
             return self._resolve_value(expr.name)
-
+        if isinstance(expr, FieldAccessExpr):
+            field_map, _, field_name = self._resolve_field_ref(expr)
+            return field_map[field_name]
         if isinstance(expr, CallExpr):
             return self._call_function(expr, require_value=True)
 
@@ -327,6 +392,10 @@ class Interpreter:
                 raise RuntimeMintError(f"'{name}' é char, mas recebeu {type(val).__name__}.")
             if len(val) != 1:
                 raise RuntimeMintError(f"'{name}' é char, mas recebeu string com {len(val)} caracteres.")
+        if t in self.structs:
+            if not isinstance(val, dict) or val.get("__struct__") != t:
+                raise RuntimeMintError(f"'{name}' é {t}, mas recebeu valor incompatível.")
+            return val
         return val
 
     def _parse_input_value(self, name: str, vartype: MintType, raw: str) -> Any:
@@ -357,4 +426,6 @@ class Interpreter:
     def _format_value(self, val: Any) -> str:
         if isinstance(val, bool):
             return "true" if val else "false"
+        if isinstance(val, dict) and "fields" in val:
+            return str(val["fields"])
         return str(val)

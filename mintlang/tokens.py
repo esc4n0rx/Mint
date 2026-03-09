@@ -58,6 +58,8 @@ class TokenType(Enum):
     ENDFUNC = auto()
     RETURN = auto()
     RETURNS = auto()
+    STRUCT = auto()
+    ENDSTRUCT = auto()
     AND = auto()
     OR = auto()
     NOT = auto()

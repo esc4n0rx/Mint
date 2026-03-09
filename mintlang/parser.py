@@ -4,8 +4,8 @@ from .tokens import Token, TokenType
 from .errors import ParserError
 from .ast_nodes import (
     Program, Stmt, WriteStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, InputStmt, MoveStmt, WhileStmt, ReturnStmt, CallStmt,
-    FuncDecl, FuncParam,
-    Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
+    FuncDecl, FuncParam, StructDecl, StructField,
+    Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, FieldAccessExpr, Binary, Unary, CallExpr, MintType
 )
 
 class Parser:
@@ -43,9 +43,13 @@ class Parser:
         self._consume(TokenType.INIT, "Esperado 'init' após 'program'.")
         self._consume(TokenType.DOT, "Esperado '.' após 'program init'.")
 
+        structs: List[StructDecl] = []
         decls: List[VarDeclStmt] = []
-        while self._check(TokenType.VAR):
-            decls.append(self._vardecl())
+        while self._check(TokenType.STRUCT) or self._check(TokenType.VAR):
+            if self._check(TokenType.STRUCT):
+                structs.append(self._struct_decl())
+            else:
+                decls.append(self._vardecl())
 
         self._consume(TokenType.INITIALIZATION, "Esperado 'initialization'.")
         self._consume(TokenType.DOT, "Esperado '.' após 'initialization'.")
@@ -63,7 +67,24 @@ class Parser:
             t = self._peek()
             raise ParserError(f"Texto extra após fim do programa em {t.line}:{t.col}")
 
-        return Program(decls=decls, body=body, funcs=funcs)
+        return Program(structs=structs, decls=decls, body=body, funcs=funcs)
+
+    def _struct_decl(self) -> StructDecl:
+        self._consume(TokenType.STRUCT, "Esperado 'STRUCT'.")
+        name = self._consume(TokenType.IDENT, "Esperado nome da struct.").lexeme
+        self._consume(TokenType.DOT, "Faltou '.' após cabeçalho da struct.")
+
+        fields: List[StructField] = []
+        while not self._check(TokenType.ENDSTRUCT):
+            field_name = self._consume(TokenType.IDENT, "Esperado nome do campo.").lexeme
+            self._consume(TokenType.TYPE, "Esperado 'type' após nome do campo.")
+            field_type = self._parse_primitive_type()
+            self._consume(TokenType.DOT, "Faltou '.' após campo da struct.")
+            fields.append(StructField(name=field_name, field_type=field_type))
+
+        self._consume(TokenType.ENDSTRUCT, "Esperado 'ENDSTRUCT'.")
+        self._consume(TokenType.DOT, "Faltou '.' após ENDSTRUCT.")
+        return StructDecl(name=name, fields=fields)
 
     def _func_decl(self) -> FuncDecl:
         self._consume(TokenType.FUNC, "Esperado 'FUNC'.")
@@ -108,6 +129,11 @@ class Parser:
         return VarDeclStmt(name=name, vartype=vartype, initializer=initializer)
 
     def _parse_type(self) -> MintType:
+        if self._check(TokenType.IDENT):
+            return self._advance().lexeme
+        return self._parse_primitive_type()
+
+    def _parse_primitive_type(self) -> MintType:
         if self._match(TokenType.INT_T):
             return "int"
         if self._match(TokenType.STRING_T):
@@ -157,7 +183,7 @@ class Parser:
             self._consume(TokenType.DOT, "Faltou '.' no fim do return.")
             return ReturnStmt(expr)
 
-        if self._check(TokenType.IDENT) and self._check_next(TokenType.EQUAL):
+        if self._is_assign_start():
             return self._assign_stmt()
 
         if self._check(TokenType.IDENT) and self._check_next(TokenType.LPAREN):
@@ -208,11 +234,32 @@ class Parser:
         return CallExpr(name=name, args=args)
 
     def _assign_stmt(self) -> AssignStmt:
-        name = self._consume(TokenType.IDENT, "Esperado nome da variável.").lexeme
+        target = self._assignment_target()
         self._consume(TokenType.EQUAL, "Esperado '=' na atribuição.")
         expr = self._expression()
         self._consume(TokenType.DOT, "Faltou '.' no fim da atribuição.")
-        return AssignStmt(name=name, expr=expr)
+        return AssignStmt(target=target, expr=expr)
+
+    def _assignment_target(self) -> Expr:
+        name = self._consume(TokenType.IDENT, "Esperado nome da variável.").lexeme
+        target: Expr = VarRef(name)
+        if self._match(TokenType.DOT):
+            field = self._consume(TokenType.IDENT, "Esperado nome do campo.").lexeme
+            target = FieldAccessExpr(base=target, field=field)
+        return target
+
+    def _is_assign_start(self) -> bool:
+        if not self._check(TokenType.IDENT):
+            return False
+        if self._check_next(TokenType.EQUAL):
+            return True
+        if self.i + 3 < len(self.tokens):
+            return (
+                self.tokens[self.i + 1].type == TokenType.DOT
+                and self.tokens[self.i + 2].type == TokenType.IDENT
+                and self.tokens[self.i + 3].type == TokenType.EQUAL
+            )
+        return False
 
     def _block_until(self, stop: set[TokenType]) -> List[Stmt]:
         body: List[Stmt] = []
@@ -309,7 +356,11 @@ class Parser:
                         args.append(self._expression())
                 self._consume(TokenType.RPAREN, "Esperado ')' após argumentos da chamada.")
                 return CallExpr(name=name, args=args)
-            return VarRef(name)
+            expr: Expr = VarRef(name)
+            while self._match(TokenType.DOT):
+                field = self._consume(TokenType.IDENT, "Esperado nome do campo.").lexeme
+                expr = FieldAccessExpr(base=expr, field=field)
+            return expr
 
         if self._match(TokenType.LPAREN):
             expr = self._expression()

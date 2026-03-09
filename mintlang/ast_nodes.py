@@ -1,7 +1,7 @@
 from dataclasses import dataclass
-from typing import List, Optional, Literal
+from typing import List, Optional
 
-MintType = Literal["int", "string", "bool", "float", "char"]
+MintType = str
 
 # -------------------------
 # Expressions
@@ -34,6 +34,12 @@ class BoolLit(Expr):
 class VarRef(Expr):
     name: str
 
+
+@dataclass
+class FieldAccessExpr(Expr):
+    base: Expr
+    field: str
+
 @dataclass
 class Binary(Expr):
     left: Expr
@@ -49,6 +55,18 @@ class Unary(Expr):
 class CallExpr(Expr):
     name: str
     args: List[Expr]
+
+
+@dataclass
+class StructField:
+    name: str
+    field_type: MintType
+
+
+@dataclass
+class StructDecl:
+    name: str
+    fields: List[StructField]
 
 # -------------------------
 # Statements
@@ -79,7 +97,7 @@ class IfStmt(Stmt):
 
 @dataclass
 class AssignStmt(Stmt):
-    name: str
+    target: Expr
     expr: Expr
 
 @dataclass
@@ -124,6 +142,7 @@ class FuncDecl:
 # -------------------------
 @dataclass
 class Program:
+    structs: List[StructDecl]
     decls: List[VarDeclStmt]
     body: List[Stmt]
     funcs: List[FuncDecl]
