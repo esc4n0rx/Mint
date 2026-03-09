@@ -30,6 +30,10 @@ KEYWORDS = {
     "input": TokenType.INPUT,
     "move": TokenType.MOVE,
     "to": TokenType.TO,
+    "query": TokenType.QUERY,
+    "from": TokenType.FROM,
+    "where": TokenType.WHERE,
+    "into": TokenType.INTO,
     "if": TokenType.IF,
     "elseif": TokenType.ELSEIF,
     "else": TokenType.ELSE,
@@ -48,9 +52,16 @@ KEYWORDS = {
     "RETURNS": TokenType.RETURNS,
     "STRUCT": TokenType.STRUCT,
     "ENDSTRUCT": TokenType.ENDSTRUCT,
+    "QUERY": TokenType.QUERY,
+    "FROM": TokenType.FROM,
+    "WHERE": TokenType.WHERE,
+    "INTO": TokenType.INTO,
     "and": TokenType.AND,
     "or": TokenType.OR,
     "not": TokenType.NOT,
+    "AND": TokenType.AND,
+    "OR": TokenType.OR,
+    "NOT": TokenType.NOT,
 }
 
 class Lexer:

@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, WhileStmt, ReturnStmt, CallStmt,
+    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, WhileStmt, ReturnStmt, CallStmt,
     FuncDecl, StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
@@ -138,6 +138,9 @@ class Interpreter:
         if isinstance(stmt, MoveStmt):
             self._assign_value(stmt.target, self._eval(stmt.source))
             return
+        if isinstance(stmt, QueryStmt):
+            self._exec_query(stmt)
+            return
         if isinstance(stmt, WhileStmt):
             self._exec_while(stmt)
             return
@@ -145,6 +148,46 @@ class Interpreter:
             raise ReturnSignal(self._eval(stmt.expr))
 
         raise RuntimeMintError(f"Stmt não suportado: {type(stmt).__name__}")
+
+    def _exec_query(self, stmt: QueryStmt) -> None:
+        source_type = self._resolve_type(stmt.source)
+        if source_type is None:
+            raise RuntimeMintError(f"Coleção '{stmt.source}' não declarada.")
+
+        source_struct = self._extract_collection_inner(source_type, "list")
+        if source_struct is None:
+            source_struct = self._extract_collection_inner(source_type, "table")
+        if source_struct is None or source_struct not in self.structs:
+            raise RuntimeMintError("QUERY exige list<Struct> ou table<Struct> como origem.")
+
+        dest_type = self._resolve_type(stmt.destination)
+        if dest_type is None:
+            raise RuntimeMintError(f"Coleção '{stmt.destination}' não declarada.")
+        if dest_type != source_type:
+            raise RuntimeMintError(f"Destino '{stmt.destination}' é incompatível com origem '{stmt.source}'.")
+
+        source_val = self._resolve_value(stmt.source)
+        dest_val = self._resolve_value(stmt.destination)
+        if not isinstance(source_val, list) or not isinstance(dest_val, list):
+            raise RuntimeMintError("QUERY exige coleções válidas em memória.")
+
+        fields = self.structs[source_struct]
+        for item in source_val:
+            if not isinstance(item, dict) or item.get("__struct__") != source_struct or "fields" not in item:
+                raise RuntimeMintError("QUERY recebeu item inválido para a struct de origem.")
+            local_scope = Scope(types={}, env={})
+            for field_name, field_type in fields.items():
+                local_scope.types[field_name] = field_type
+                local_scope.env[field_name] = item["fields"][field_name]
+            self._push_scope(local_scope)
+            try:
+                cond_val = self._eval(stmt.condition)
+            finally:
+                self._pop_scope()
+            if not isinstance(cond_val, bool):
+                raise RuntimeMintError("WHERE da QUERY deve resultar em bool.")
+            if cond_val:
+                dest_val.append(item)
 
     def _resolve_input_target(self, target: Expr) -> tuple[str, MintType]:
         if isinstance(target, VarRef):

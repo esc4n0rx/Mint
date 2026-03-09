@@ -143,6 +143,12 @@ class MoveStmt(Stmt):
     target: str
 
 @dataclass
+class QueryStmt(Stmt):
+    source: str
+    condition: Expr
+    destination: str
+
+@dataclass
 class WhileStmt(Stmt):
     condition: Expr
     body: List[Stmt]

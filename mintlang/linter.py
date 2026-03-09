@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 from .ast_nodes import (
-    Program, VarDeclStmt, WriteStmt, AddStmt, InsertStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, WhileStmt, ReturnStmt, CallStmt, FuncDecl, Stmt,
+    Program, VarDeclStmt, WriteStmt, AddStmt, InsertStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, WhileStmt, ReturnStmt, CallStmt, FuncDecl, Stmt,
     StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
@@ -192,6 +192,39 @@ class Linter:
                 ))
             return
 
+        if isinstance(stmt, QueryStmt):
+            source_type = sym.get(stmt.source)
+            if source_type is None:
+                issues.append(LintIssue(f"Coleção '{stmt.source}' não declarada."))
+                return
+
+            source_struct = self._extract_collection_inner(source_type, "list")
+            if source_struct is None:
+                source_struct = self._extract_collection_inner(source_type, "table")
+            if source_struct is None or source_struct not in structs:
+                issues.append(LintIssue("QUERY exige list<Struct> ou table<Struct> como origem."))
+                return
+
+            dest_type = sym.get(stmt.destination)
+            if dest_type is None:
+                issues.append(LintIssue(f"Coleção '{stmt.destination}' não declarada."))
+                return
+            if dest_type != source_type:
+                issues.append(LintIssue(f"Destino '{stmt.destination}' é incompatível com origem '{stmt.source}'."))
+
+            condition_type = self._infer_type(
+                stmt.condition,
+                sym,
+                funcs,
+                structs,
+                issues,
+                query_struct_fields=structs[source_struct],
+                query_struct_name=source_struct,
+            )
+            if condition_type is not None and condition_type != "bool":
+                issues.append(LintIssue("WHERE da QUERY deve resultar em bool."))
+            return
+
         if isinstance(stmt, IfStmt):
             for branch in stmt.branches:
                 cond_type = self._infer_type(branch.condition, sym, funcs, structs, issues)
@@ -304,6 +337,8 @@ class Linter:
         funcs: Dict[str, FuncSignature],
         structs: Dict[str, Dict[str, MintType]],
         issues: List[LintIssue],
+        query_struct_fields: Optional[Dict[str, MintType]] = None,
+        query_struct_name: Optional[str] = None,
     ) -> Optional[MintType]:
         if isinstance(expr, IntLit):
             return "int"
@@ -318,6 +353,12 @@ class Linter:
         if isinstance(expr, BoolLit):
             return "bool"
         if isinstance(expr, VarRef):
+            if query_struct_fields is not None:
+                field_type = query_struct_fields.get(expr.name)
+                if field_type is None:
+                    issues.append(LintIssue(f"Campo '{expr.name}' não existe na struct '{query_struct_name}'."))
+                    return None
+                return field_type
             t = sym.get(expr.name)
             if t is None:
                 issues.append(LintIssue(f"Uso de variável não declarada: '{expr.name}'."))
@@ -325,8 +366,8 @@ class Linter:
         if isinstance(expr, FieldAccessExpr):
             return self._resolve_field_type(expr, sym, structs, issues)
         if isinstance(expr, IndexAccessExpr):
-            base_type = self._infer_type(expr.base, sym, funcs, structs, issues)
-            index_type = self._infer_type(expr.index, sym, funcs, structs, issues)
+            base_type = self._infer_type(expr.base, sym, funcs, structs, issues, query_struct_fields, query_struct_name)
+            index_type = self._infer_type(expr.index, sym, funcs, structs, issues, query_struct_fields, query_struct_name)
             if index_type is not None and index_type != "int":
                 issues.append(LintIssue("Índice deve ser numérico (int)."))
             list_inner = self._extract_collection_inner(base_type, "list")
@@ -339,7 +380,7 @@ class Linter:
                 issues.append(LintIssue("Acesso por índice requer list<T> ou table<T>."))
             return None
         if isinstance(expr, SizeCall):
-            collection_type = self._infer_type(expr.collection, sym, funcs, structs, issues)
+            collection_type = self._infer_type(expr.collection, sym, funcs, structs, issues, query_struct_fields, query_struct_name)
             if self._extract_collection_inner(collection_type, "list") is None and self._extract_collection_inner(collection_type, "table") is None:
                 issues.append(LintIssue("size() aceita apenas list<T> ou table<T>."))
             return "int"
@@ -347,7 +388,7 @@ class Linter:
             return self._lint_call(expr, sym, funcs, structs, issues, require_value=True)
 
         if isinstance(expr, Unary):
-            t = self._infer_type(expr.expr, sym, funcs, structs, issues)
+            t = self._infer_type(expr.expr, sym, funcs, structs, issues, query_struct_fields, query_struct_name)
             if expr.op == "not":
                 if t is not None and t != "bool":
                     issues.append(LintIssue(
@@ -361,8 +402,8 @@ class Linter:
             return t if t is not None else None
 
         if isinstance(expr, Binary):
-            lt = self._infer_type(expr.left, sym, funcs, structs, issues)
-            rt = self._infer_type(expr.right, sym, funcs, structs, issues)
+            lt = self._infer_type(expr.left, sym, funcs, structs, issues, query_struct_fields, query_struct_name)
+            rt = self._infer_type(expr.right, sym, funcs, structs, issues, query_struct_fields, query_struct_name)
             if expr.op in ("and", "or"):
                 if lt is None or rt is None:
                     return None
