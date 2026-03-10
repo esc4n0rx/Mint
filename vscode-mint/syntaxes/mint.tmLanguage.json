@@ -16,6 +16,9 @@
       "include": "#types"
     },
     {
+      "include": "#systemNamespace"
+    },
+    {
       "include": "#fieldAccess"
     },
     {
@@ -155,6 +158,22 @@
         {
           "name": "punctuation.parenthesis.mint",
           "match": "(\\(|\\)|\\[|\\]|<|>)"
+        }
+      ]
+    },
+    "systemNamespace": {
+      "patterns": [
+        {
+          "name": "meta.namespace.system.mint",
+          "match": "\\b(system)\\.(date|time|datetime|timestamp|year|month|day|weekday|hour|minute|second)\\b",
+          "captures": {
+            "1": {
+              "name": "support.namespace.mint"
+            },
+            "2": {
+              "name": "support.constant.system.mint"
+            }
+          }
         }
       ]
     }
