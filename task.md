@@ -158,3 +158,10 @@ Registro consolidado das funcionalidades implementadas.
 - Interpreter atualizado para resolver valores sistêmicos a partir do ambiente de execução no momento da leitura.
 - Highlighter do VS Code atualizado em `vscode-mint/syntaxes/mint.tmLanguage.json` para destacar `system` e membros sistêmicos.
 - Exemplos adicionados em `examples/system_datetime.mint`, `examples/system_conditions.mint` e `examples/system_assignment.mint`.
+
+## 2026-03-10 — Feature: Mint IDE Desktop (PyQt5)
+- Nome: `Mint IDE` oficial em `/ide`.
+- Implementado app desktop com PyQt5 e arquitetura modular (`core`, `ui`, `editor`, `models`, `utils`).
+- Entregues: janela principal completa, explorer de arquivos/workspace, editor com abas múltiplas, syntax highlight Mint, terminal/output integrado, execução assíncrona do runtime Mint, integração de linter com painel de problemas, status bar e atalhos principais.
+- Incluídos fluxos de abrir/salvar/salvar como/salvar todos, confirmação para alterações não salvas e settings persistentes (`QSettings`).
+- Documentação adicionada em `ide/README.md`.

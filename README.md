@@ -74,3 +74,8 @@ mint -create HelloWorld.mint
 - `examples/input_unknown_var.mint`
 - `examples/move_type_error.mint`
 - `examples/HelloWorld.mint`
+
+## IDE oficial (desktop)
+- Implementação em `ide/` com PyQt5.
+- Execute com: `python -m ide.main`.
+- Documentação: `ide/README.md`.
