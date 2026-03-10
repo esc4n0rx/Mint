@@ -8,6 +8,20 @@ from .ast_nodes import (
 )
 
 BUILTIN_TYPES = {"int", "float", "string", "char", "bool"}
+RESERVED_NAMESPACE = "system"
+SYSTEM_MEMBERS: Dict[str, MintType] = {
+    "date": "string",
+    "time": "string",
+    "datetime": "string",
+    "timestamp": "int",
+    "year": "int",
+    "month": "int",
+    "day": "int",
+    "weekday": "int",
+    "hour": "int",
+    "minute": "int",
+    "second": "int",
+}
 
 
 @dataclass
@@ -30,10 +44,14 @@ class Linter:
         funcs: Dict[str, FuncSignature] = {}
 
         for func in program.funcs:
+            if func.name == RESERVED_NAMESPACE:
+                issues.append(LintIssue("system é um namespace reservado da linguagem."))
             if func.name in funcs:
                 issues.append(LintIssue(f"Função '{func.name}' já declarada."))
                 continue
             for param in func.params:
+                if param.name == RESERVED_NAMESPACE:
+                    issues.append(LintIssue("system é um namespace reservado da linguagem."))
                 err = self._validate_declared_type(param.param_type, structs)
                 if err is not None:
                     issues.append(LintIssue(f"Tipo inválido no parâmetro '{param.name}' da função '{func.name}': {err}"))
@@ -45,6 +63,9 @@ class Linter:
             )
 
         for d in program.decls:
+            if d.name == RESERVED_NAMESPACE:
+                issues.append(LintIssue("system é um namespace reservado da linguagem."))
+                continue
             if d.name in global_sym:
                 issues.append(LintIssue(f"Variável '{d.name}' declarada mais de uma vez."))
                 continue
@@ -71,6 +92,9 @@ class Linter:
     def _collect_structs(self, struct_decls: List[StructDecl], issues: List[LintIssue]) -> Dict[str, Dict[str, MintType]]:
         structs: Dict[str, Dict[str, MintType]] = {}
         for decl in struct_decls:
+            if decl.name == RESERVED_NAMESPACE:
+                issues.append(LintIssue("system é um namespace reservado da linguagem."))
+                continue
             if decl.name in structs:
                 issues.append(LintIssue(f"Struct '{decl.name}' já declarada."))
                 continue
@@ -124,6 +148,9 @@ class Linter:
         current_return: Optional[MintType],
     ) -> None:
         if isinstance(stmt, VarDeclStmt):
+            if stmt.name == RESERVED_NAMESPACE:
+                issues.append(LintIssue("system é um namespace reservado da linguagem."))
+                return
             if stmt.name in sym:
                 issues.append(LintIssue(f"Variável '{stmt.name}' declarada mais de uma vez."))
                 return
@@ -290,6 +317,9 @@ class Linter:
             return
 
         if isinstance(stmt, ForStmt):
+            if stmt.item_name == RESERVED_NAMESPACE:
+                issues.append(LintIssue("system é um namespace reservado da linguagem."))
+                return
             collection_type = self._infer_type(stmt.collection, sym, funcs, structs, issues)
             item_type = self._extract_collection_inner(collection_type, "list")
             if item_type is None:
@@ -351,6 +381,9 @@ class Linter:
         structs: Dict[str, Dict[str, MintType]],
         issues: List[LintIssue],
     ) -> Optional[MintType]:
+        if isinstance(expr, FieldAccessExpr) and self._is_system_access(expr):
+            issues.append(LintIssue("Namespace system é somente leitura."))
+            return None
         if isinstance(expr, VarRef):
             var_type = sym.get(expr.name)
             if var_type is None:
@@ -404,6 +437,9 @@ class Linter:
         if isinstance(expr, BoolLit):
             return "bool"
         if isinstance(expr, VarRef):
+            if expr.name == RESERVED_NAMESPACE:
+                issues.append(LintIssue("system é um namespace reservado da linguagem."))
+                return None
             if query_struct_fields is not None:
                 field_type = query_struct_fields.get(expr.name)
                 if field_type is None:
@@ -415,6 +451,8 @@ class Linter:
                 issues.append(LintIssue(f"Uso de variável não declarada: '{expr.name}'."))
             return t
         if isinstance(expr, FieldAccessExpr):
+            if self._is_system_access(expr):
+                return self._infer_system_type(expr, issues)
             return self._resolve_field_type(expr, sym, structs, issues)
         if isinstance(expr, IndexAccessExpr):
             base_type = self._infer_type(expr.base, sym, funcs, structs, issues, query_struct_fields, query_struct_name)
@@ -606,6 +644,18 @@ class Linter:
                 issues.append(LintIssue(f"Função '{call.name}' não retorna valor e não pode ser usada em expressão."))
             return None
         return sig.return_type
+
+    def _is_system_access(self, expr: FieldAccessExpr) -> bool:
+        return isinstance(expr.base, VarRef) and expr.base.name == RESERVED_NAMESPACE
+
+    def _infer_system_type(self, expr: FieldAccessExpr, issues: List[LintIssue]) -> Optional[MintType]:
+        if not self._is_system_access(expr):
+            return None
+        member_type = SYSTEM_MEMBERS.get(expr.field)
+        if member_type is None:
+            issues.append(LintIssue(f"Membro '{expr.field}' não existe no namespace system."))
+            return None
+        return member_type
 
     def _is_assignment_compatible(self, target: MintType, source: MintType) -> bool:
         if target == source:

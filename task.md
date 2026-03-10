@@ -143,3 +143,18 @@ Registro consolidado das funcionalidades implementadas.
 - Interpreter atualizado para executar `FOR`, calcular agregações em varredura linear e capturar `RuntimeMintError` em `TRY/CATCH`.
 - Highlighter do VS Code atualizado para destacar `FOR`, `IN`, `ENDFOR`, `TRY`, `CATCH`, `ENDTRY`, `count`, `sum`, `avg`.
 - Exemplos adicionados: `examples/for_numbers.mint`, `examples/for_structs.mint`, `examples/aggregations.mint`, `examples/try_catch_load.mint`, `examples/try_catch_avg.mint`.
+
+## 2026-03-10 — Feature: Variáveis Sistêmicas (`system` namespace)
+- Nome: Namespace reservado `system` para valores sistêmicos nativos.
+- Core atualizado com suporte a:
+  - resolução de `system.date`, `system.time`, `system.datetime`, `system.timestamp`, `system.year`, `system.month`, `system.day`, `system.weekday`;
+  - suporte adicional a `system.hour`, `system.minute`, `system.second`;
+  - avaliação em runtime a cada acesso, com `weekday` normalizado para `1=Monday ... 7=Sunday`.
+- Linter atualizado para validar:
+  - `system` como namespace reservado (bloqueando declarações de variável/struct/função/parâmetro e uso como variável comum);
+  - membros válidos do namespace `system`;
+  - tipagem estática conhecida para cada membro;
+  - bloqueio de escrita em `system.*` (namespace somente leitura).
+- Interpreter atualizado para resolver valores sistêmicos a partir do ambiente de execução no momento da leitura.
+- Highlighter do VS Code atualizado em `vscode-mint/syntaxes/mint.tmLanguage.json` para destacar `system` e membros sistêmicos.
+- Exemplos adicionados em `examples/system_datetime.mint`, `examples/system_conditions.mint` e `examples/system_assignment.mint`.

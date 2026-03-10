@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from datetime import datetime
 import csv
 from typing import Dict, Any, Optional, List
 from pathlib import Path
@@ -18,6 +19,7 @@ DEFAULTS: Dict[MintType, Any] = {
     "char": "\0",
 }
 
+SYSTEM_NAMESPACE = "system"
 
 class ReturnSignal(Exception):
     def __init__(self, value: Any):
@@ -486,6 +488,9 @@ class Interpreter:
         if isinstance(expr, VarRef):
             return self._resolve_value(expr.name)
         if isinstance(expr, FieldAccessExpr):
+            system_value = self._eval_system_field(expr)
+            if system_value is not None:
+                return system_value
             base_value = self._eval(expr.base)
             if not isinstance(base_value, dict) or "fields" not in base_value:
                 raise RuntimeMintError("Acesso de campo inválido: base não é struct.")
@@ -563,6 +568,27 @@ class Interpreter:
             raise RuntimeMintError(f"Operador inválido: {expr.op}")
 
         raise RuntimeMintError(f"Expr não suportada: {type(expr).__name__}")
+
+    def _eval_system_field(self, expr: FieldAccessExpr) -> Optional[Any]:
+        if not isinstance(expr.base, VarRef) or expr.base.name != SYSTEM_NAMESPACE:
+            return None
+        now = datetime.now()
+        system_values: Dict[str, Any] = {
+            "date": now.strftime("%Y-%m-%d"),
+            "time": now.strftime("%H:%M:%S"),
+            "datetime": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": int(now.timestamp()),
+            "year": now.year,
+            "month": now.month,
+            "day": now.day,
+            "weekday": now.isoweekday(),
+            "hour": now.hour,
+            "minute": now.minute,
+            "second": now.second,
+        }
+        if expr.field not in system_values:
+            raise RuntimeMintError(f"Membro '{expr.field}' não existe no namespace system.")
+        return system_values[expr.field]
 
     def _eval_aggregation(self, target: Expr, mode: str) -> Any:
         values: List[float | int] = []
