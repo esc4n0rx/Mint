@@ -4,11 +4,11 @@ from pathlib import Path
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
+    QApplication,
     QAction,
     QFileDialog,
     QInputDialog,
     QMainWindow,
-    QMenu,
     QMessageBox,
     QSplitter,
     QTabWidget,
@@ -21,13 +21,16 @@ from PyQt5.QtWidgets import (
 from ide.core.file_manager import FileManager
 from ide.core.linter_bridge import LinterBridge
 from ide.core.project_manager import ProjectManager
+from ide.core.realtime_validator import RealtimeValidator
 from ide.core.runner import MintRunner
 from ide.core.settings_manager import SettingsManager
+from ide.core.theme_manager import ThemeManager
 from ide.core.workspace_manager import WorkspaceManager
 from ide.models.diagnostics import Diagnostic
 from ide.ui.dialogs import SettingsDialog
 from ide.ui.editor_tabs import EditorTabs
 from ide.ui.file_explorer import FileExplorer
+from ide.ui.learn_mint_dialog import LearnMintDialog
 from ide.ui.status_bar import IdeStatusBar
 from ide.ui.terminal_panel import TerminalPanel
 
@@ -44,7 +47,9 @@ class MainWindow(QMainWindow):
         self.project = ProjectManager(self.settings)
         self.files = FileManager()
         self.linter = LinterBridge()
+        self.realtime_validator = RealtimeValidator(self)
         self.runner = MintRunner()
+        self._latest_validation_request = 0
 
         self.editor_tabs = EditorTabs(self.config["tab_size"], self.config["use_spaces"])
         self.editor_tabs.file_changed.connect(self._on_file_modified)
@@ -61,9 +66,10 @@ class MainWindow(QMainWindow):
 
         self.terminal = TerminalPanel()
 
-        self.problems_table = QTableWidget(0, 5)
-        self.problems_table.setHorizontalHeaderLabels(["Tipo", "Mensagem", "Arquivo", "Linha", "Coluna"])
+        self.problems_table = QTableWidget(0, 6)
+        self.problems_table.setHorizontalHeaderLabels(["Tipo", "Mensagem", "Arquivo", "Linha", "Coluna", "Sugestão"])
         self.problems_table.cellDoubleClicked.connect(self._go_to_problem)
+        self.problems_table.setAlternatingRowColors(True)
 
         self.bottom_tabs = QTabWidget()
         self.bottom_tabs.addTab(self.terminal, "Terminal")
@@ -91,6 +97,7 @@ class MainWindow(QMainWindow):
         self._build_actions()
         self._build_menus()
         self._wire_runner()
+        self._wire_realtime_validator()
         self._apply_editor_font()
         self._restore_last_workspace()
 
@@ -106,9 +113,10 @@ class MainWindow(QMainWindow):
         self.act_lint = QAction("Lint atual", self, shortcut="F8", triggered=self.lint_current)
         self.act_settings = QAction("Configurações", self, triggered=self.open_settings)
         self.act_about = QAction("Sobre", self, triggered=self.about)
+        self.act_learn = QAction("Aprender Mint", self, triggered=self.open_learn_mint)
 
         tb = self.addToolBar("Main")
-        for act in [self.act_new, self.act_open, self.act_open_ws, self.act_save, self.act_run, self.act_lint]:
+        for act in [self.act_new, self.act_open, self.act_open_ws, self.act_save, self.act_run, self.act_lint, self.act_learn]:
             tb.addAction(act)
 
     def _build_menus(self):
@@ -119,13 +127,16 @@ class MainWindow(QMainWindow):
         m_run.addActions([self.act_run, self.act_stop, self.act_lint])
 
         m_help = self.menuBar().addMenu("Ajuda")
-        m_help.addActions([self.act_settings, self.act_about])
+        m_help.addActions([self.act_learn, self.act_settings, self.act_about])
 
     def _wire_runner(self):
         self.runner.started.connect(lambda p: self.terminal.append_text(f"[run] {p}"))
         self.runner.output.connect(self.terminal.append_text)
         self.runner.error.connect(lambda t: self.terminal.append_text(f"[stderr] {t}"))
         self.runner.finished.connect(lambda code: self.status.showMessage(f"Execução finalizada (código {code})", 4000))
+
+    def _wire_realtime_validator(self):
+        self.realtime_validator.diagnostics_ready.connect(self._on_realtime_diagnostics)
 
     def _restore_last_workspace(self):
         last = self.config.get("last_workspace")
@@ -139,8 +150,14 @@ class MainWindow(QMainWindow):
             font.setPointSize(int(self.config["font_size"]))
             editor.setFont(font)
 
+    def _connect_editor_signals(self, editor):
+        editor.textChanged.connect(self._queue_realtime_validation)
+
     def new_file(self):
         self.editor_tabs.new_unsaved()
+        editor = self.editor_tabs.current_editor()
+        if editor:
+            self._connect_editor_signals(editor)
 
     def open_file_dialog(self):
         path, _ = QFileDialog.getOpenFileName(self, "Abrir arquivo", str(Path.cwd()), "Mint files (*.mint);;All files (*.*)")
@@ -153,10 +170,10 @@ class MainWindow(QMainWindow):
             self._open_workspace(path)
 
     def _open_workspace(self, path: str):
-        self.workspace.open_workspace(path)
-        self.explorer.set_root_path(path)
-        self.project.set_last_workspace(path)
-        self.status.set_workspace(path)
+        ws = self.workspace.open_workspace(path)
+        self.explorer.set_root_path(str(ws))
+        self.status.set_workspace(str(ws))
+        self.project.set_last_workspace(str(ws))
 
     def open_file(self, file_path: str):
         try:
@@ -165,8 +182,12 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Erro", f"Falha ao abrir arquivo: {exc}")
             return
         self.editor_tabs.open_file(file_path, content)
+        editor = self.editor_tabs.current_editor()
+        if editor:
+            self._connect_editor_signals(editor)
         self.project.add_recent_file(file_path)
         self.status.set_file(file_path)
+        self._queue_realtime_validation()
 
     def save_current(self):
         editor = self.editor_tabs.current_editor()
@@ -217,20 +238,40 @@ class MainWindow(QMainWindow):
             return
         diagnostics = self.linter.lint_file(path)
         self._set_diagnostics(diagnostics)
+        self._apply_editor_diagnostics(diagnostics)
         self.bottom_tabs.setCurrentIndex(1)
+
+    def _queue_realtime_validation(self):
+        editor = self.editor_tabs.current_editor()
+        if not editor:
+            return
+        self.realtime_validator.queue_validation(editor.toPlainText(), self.editor_tabs.current_path())
+
+    def _on_realtime_diagnostics(self, request_id: int, diagnostics: list[Diagnostic]):
+        if request_id < self._latest_validation_request:
+            return
+        self._latest_validation_request = request_id
+        self._set_diagnostics(diagnostics)
+        self._apply_editor_diagnostics(diagnostics)
+
+    def _apply_editor_diagnostics(self, diagnostics: list[Diagnostic]):
+        editor = self.editor_tabs.current_editor()
+        if editor:
+            editor.set_diagnostics(diagnostics)
 
     def _set_diagnostics(self, diagnostics: list[Diagnostic]):
         self.problems_table.setRowCount(0)
         for diag in diagnostics:
             row = self.problems_table.rowCount()
             self.problems_table.insertRow(row)
-            values = [diag.severity, diag.message, diag.file_path, str(diag.line), str(diag.column)]
+            values = [diag.severity, diag.message, diag.file_path, str(diag.line), str(diag.column), diag.suggestion]
             for col, value in enumerate(values):
                 self.problems_table.setItem(row, col, QTableWidgetItem(value))
 
     def _go_to_problem(self, row: int, _col: int):
         file_path = self.problems_table.item(row, 2).text()
         line = int(self.problems_table.item(row, 3).text() or 0)
+        col = int(self.problems_table.item(row, 4).text() or 0)
         if file_path:
             self.open_file(file_path)
         ed = self.editor_tabs.current_editor()
@@ -238,6 +279,8 @@ class MainWindow(QMainWindow):
             cursor = ed.textCursor()
             cursor.movePosition(cursor.Start)
             cursor.movePosition(cursor.Down, cursor.MoveAnchor, line - 1)
+            if col > 0:
+                cursor.movePosition(cursor.Right, cursor.MoveAnchor, col - 1)
             ed.setTextCursor(cursor)
 
     def _on_file_modified(self, file_path: str, modified: bool):
@@ -249,6 +292,7 @@ class MainWindow(QMainWindow):
 
     def _on_tab_changed(self, _idx: int):
         self.status.set_file(self.editor_tabs.current_path())
+        self._queue_realtime_validation()
 
     def _close_tab(self, index: int):
         editor = self.editor_tabs.widget(index)
@@ -300,6 +344,7 @@ class MainWindow(QMainWindow):
         vals = dlg.values()
         for k, v in vals.items():
             setting_key = {
+                "theme": "editor/theme",
                 "font_size": "editor/font_size",
                 "tab_size": "editor/tab_size",
                 "use_spaces": "editor/use_spaces",
@@ -310,9 +355,22 @@ class MainWindow(QMainWindow):
             self.settings.set(setting_key, v)
         self.settings.sync()
         self.config = self.settings.load_all()
+        ThemeManager().apply(QApplication.instance(), self.config.get("theme", "dark"))
+
+    def open_learn_mint(self):
+        dlg = LearnMintDialog(self)
+        dlg.insert_example_requested.connect(self._insert_example)
+        dlg.exec_()
+
+    def _insert_example(self, snippet: str):
+        if self.editor_tabs.current_editor() is None:
+            self.new_file()
+        editor = self.editor_tabs.current_editor()
+        if editor:
+            editor.setPlainText(snippet)
 
     def about(self):
-        QMessageBox.information(self, "Sobre", "Mint IDE\nIDE oficial para desenvolvimento em Mint.")
+        QMessageBox.information(self, "Sobre", "Mint IDE\nIDE oficial para desenvolvimento em Mint.\nAgora com tema dark, validação em tempo real e guia Aprenda Mint.")
 
     def closeEvent(self, event):
         unsaved = []

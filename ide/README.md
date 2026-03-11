@@ -52,3 +52,11 @@ Também há campos de configuração para caminhos de runtime/linter no diálogo
 - painel de busca global e replace;
 - restaurar sessão completa de abas e posição de cursor;
 - temas avançados e customização visual.
+
+## Novidades (2026-03-11)
+
+- Tema dark padrão com `ThemeManager` e stylesheet central em `assets/themes/dark.qss`.
+- Validação de sintaxe em tempo real com debounce + thread, sugestões de typo e integração com parser/linter.
+- Destaque visual de diagnósticos no editor (sublinhado ondulado + tooltip).
+- Painel de problemas ampliado com coluna de sugestão e navegação por linha/coluna.
+- Área educativa **Aprender Mint** com tópicos, explicações e botão para inserir exemplo no editor.
