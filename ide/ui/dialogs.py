@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QLineEdit, QSpinBox
+from PyQt5.QtWidgets import QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLineEdit, QSpinBox
 
 
 class SettingsDialog(QDialog):
     def __init__(self, settings: dict, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Configurações")
+        self.theme = QComboBox()
+        self.theme.addItems(["dark"])
+        self.theme.setCurrentText(settings.get("theme", "dark"))
+
         self.font_size = QSpinBox()
         self.font_size.setRange(8, 32)
         self.font_size.setValue(settings.get("font_size", 12))
@@ -21,6 +25,7 @@ class SettingsDialog(QDialog):
         self.linter_path = QLineEdit(settings.get("linter_path", ""))
 
         form = QFormLayout(self)
+        form.addRow("Tema", self.theme)
         form.addRow("Tamanho da fonte", self.font_size)
         form.addRow("Tab size", self.tab_size)
         form.addRow(self.use_spaces)
@@ -35,6 +40,7 @@ class SettingsDialog(QDialog):
 
     def values(self) -> dict:
         return {
+            "theme": self.theme.currentText(),
             "font_size": self.font_size.value(),
             "tab_size": self.tab_size.value(),
             "use_spaces": self.use_spaces.isChecked(),

@@ -165,3 +165,24 @@ Registro consolidado das funcionalidades implementadas.
 - Entregues: janela principal completa, explorer de arquivos/workspace, editor com abas múltiplas, syntax highlight Mint, terminal/output integrado, execução assíncrona do runtime Mint, integração de linter com painel de problemas, status bar e atalhos principais.
 - Incluídos fluxos de abrir/salvar/salvar como/salvar todos, confirmação para alterações não salvas e settings persistentes (`QSettings`).
 - Documentação adicionada em `ide/README.md`.
+
+## 2026-03-11 — Feature: Evolução visual da Mint IDE + Validação em Tempo Real + Aprenda Mint
+- Nome: modernização da IDE oficial em `/ide` com foco em experiência de uso.
+- UI/tema:
+  - dark mode definido como padrão com infraestrutura de tema em `ide/core/theme_manager.py` e assets em `ide/assets/themes/dark.qss`;
+  - aplicação do tema no bootstrap da IDE e suporte preparado para novos temas futuros;
+  - refinamentos visuais para menus, toolbar, tabs, explorer, tabelas, painéis e status bar via QSS centralizado.
+- Validação em tempo real:
+  - novo módulo `ide/core/realtime_validator.py` com debounce e validação assíncrona (thread);
+  - diagnósticos com severidade, posição e sugestão (`ide/models/diagnostics.py`);
+  - detecção incremental de typos de keywords/comandos, import malformado e blocos não fechados;
+  - integração com lexer/parser/linter do Mint para diagnósticos sintáticos/semânticos durante edição.
+- Integração na UI:
+  - sublinhado ondulado no editor + tooltip contextual de erro/aviso;
+  - sincronização com painel de problemas (incluindo coluna de sugestão) e navegação para linha/coluna;
+  - atualização automática ao trocar de aba ou editar arquivo.
+- Área educativa:
+  - novo diálogo `Aprender Mint` com tópicos navegáveis e conteúdo introdutório da linguagem;
+  - exemplos práticos embutidos e ação para inserir snippet diretamente no editor.
+- Configurações:
+  - diálogo de settings atualizado com seleção de tema (estrutura extensível, dark ativo atualmente).

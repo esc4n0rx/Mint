@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import QRect, QSize, Qt
-from PyQt5.QtGui import QColor, QPainter, QTextFormat
-from PyQt5.QtWidgets import QPlainTextEdit, QTextEdit
+from PyQt5.QtGui import QColor, QPainter, QTextCharFormat, QTextFormat
+from PyQt5.QtWidgets import QPlainTextEdit, QTextEdit, QToolTip
+
+from ide.models.diagnostics import Diagnostic
 
 from .auto_indent import next_line_indent
 from .bracket_matcher import bracket_selections
@@ -17,12 +19,18 @@ class MintEditor(QPlainTextEdit):
         self._use_spaces = use_spaces
         self._line_number_area = LineNumberArea(self)
         self._highlighter = MintSyntaxHighlighter(self.document())
+        self._diagnostics: list[Diagnostic] = []
 
+        self.setMouseTracking(True)
         self.blockCountChanged.connect(self._update_line_number_area_width)
         self.updateRequest.connect(self._update_line_number_area)
         self.cursorPositionChanged.connect(self._update_highlights)
 
         self._update_line_number_area_width(0)
+        self._update_highlights()
+
+    def set_diagnostics(self, diagnostics: list[Diagnostic]) -> None:
+        self._diagnostics = diagnostics
         self._update_highlights()
 
     def line_number_area_size(self) -> QSize:
@@ -77,8 +85,38 @@ class MintEditor(QPlainTextEdit):
         line_sel.cursor.clearSelection()
         selections.append(line_sel)
 
+        for diag in self._diagnostics:
+            if diag.line <= 0:
+                continue
+            sel = QTextEdit.ExtraSelection()
+            cur = self.textCursor()
+            block = self.document().findBlockByNumber(diag.line - 1)
+            if not block.isValid():
+                continue
+            offset = max(0, diag.column - 1)
+            cur.setPosition(block.position() + offset)
+            cur.movePosition(cur.NextCharacter, cur.KeepAnchor)
+            fmt = QTextCharFormat()
+            fmt.setUnderlineStyle(QTextCharFormat.WaveUnderline)
+            fmt.setUnderlineColor(QColor("#ff6b6b") if diag.severity == "error" else QColor("#f5c542"))
+            sel.cursor = cur
+            sel.format = fmt
+            selections.append(sel)
+
         selections.extend(bracket_selections(self))
         self.setExtraSelections(selections)
+
+    def mouseMoveEvent(self, event):
+        cursor = self.cursorForPosition(event.pos())
+        line = cursor.blockNumber() + 1
+        col = cursor.columnNumber() + 1
+        for diag in self._diagnostics:
+            if diag.line == line and (diag.column == 0 or diag.column == col):
+                QToolTip.showText(event.globalPos(), diag.full_message, self)
+                break
+        else:
+            QToolTip.hideText()
+        super().mouseMoveEvent(event)
 
     def keyPressEvent(self, event):
         key = event.key()
