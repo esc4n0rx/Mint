@@ -186,3 +186,10 @@ Registro consolidado das funcionalidades implementadas.
   - exemplos práticos embutidos e ação para inserir snippet diretamente no editor.
 - Configurações:
   - diálogo de settings atualizado com seleção de tema (estrutura extensível, dark ativo atualmente).
+
+## 2026-03-11 — Exemplo oficial: Customer CRUD modular em Mint
+- Nova pasta `examples/customer_crud` com programa completo de cadastro de clientes no terminal.
+- Arquitetura modular com imports entre múltiplos arquivos (`main`, `menu`, `service`, `repository`, `validators`, `helpers`, `model`).
+- CRUD completo com persistência CSV em `examples/customer_crud/data/clients.csv`.
+- Demonstrações práticas de `QUERY`, `FOR`, agregações (`count/sum/avg`), `TRY/CATCH` e variáveis sistêmicas (`system.datetime`).
+- README do exemplo com instruções de execução, estrutura e objetivos didáticos.
