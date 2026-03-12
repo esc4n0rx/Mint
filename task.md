@@ -2,6 +2,35 @@
 
 Registro consolidado das funcionalidades implementadas.
 
+## 2026-03-12 — Ajustes adicionais de robustez (follow-up)
+- Linter passou a detectar divisão/módulo por zero com literal (`/ 0` e `% 0`) antes de runtime.
+- Runtime numérico endurecido para não tratar `bool` como `int` em operações aritméticas.
+- Testes automatizados adicionados para:
+  - guard de divisão por zero no linter;
+  - não vazamento de escopo de variável declarada dentro de `FOR`;
+  - rejeição léxica imediata de char inválido (`'AB'`);
+  - bloqueio de path traversal em `LOAD`.
+
+## 2026-03-12 — Correções de robustez (runtime/linter/highlighter)
+- Core:
+  - Divisão `/` no interpreter passa a retornar `float` também para `int/int`.
+  - Operador `%` adicionado no lexer/parser/linter/interpreter com validação `int % int`.
+  - Concatenação de strings com `+` suportada em linter e runtime.
+  - LOAD/SAVE/EXPORT agora validam caminho com sandbox no diretório atual (bloqueio de path traversal).
+  - QUERY evita falha por campo ausente usando leitura segura com fallback de valor padrão.
+  - Lexer valida `char` com exatamente 1 caractere já na análise léxica e amplia escapes com `\r` e `\\`.
+  - Linter adiciona warning para índice negativo e bloqueia `insert` com alvo que não seja variável.
+- MintDB:
+  - `AUTO_INCREMENT` implementado no append com preenchimento automático por `max + 1`.
+  - `DB COMPACT` ajustado para liberar/reassumir lock durante `os.replace`, melhorando compatibilidade no Windows.
+- Organização:
+  - Novo `mintlang/utils.py` para utilitários compartilhados (`extract_collection_inner`, `is_struct_collection`, `SYSTEM_MEMBERS`, conversão/serialização).
+  - Linter/interpreter delegam para utilitários centralizados.
+  - AST remove tipos mortos `ListType` e `TableType`.
+- Highlighters:
+  - VS Code: operadores incluem `%`, escapes com `\r` e regras case-insensitive com `(?i)`.
+  - IDE (PyQt): keywords case-insensitive (`Qt.CaseInsensitive`) e suporte visual ao operador `%`.
+
 ## 2026-01-21 — MVP do núcleo
 - Lexer, parser, AST, linter e interpreter iniciais.
 - Estrutura obrigatória `program init.` / `initialization.` / `endprogram.`

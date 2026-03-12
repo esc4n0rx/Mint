@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt5.QtCore import QRegExp
+from PyQt5.QtCore import QRegExp, Qt
 from PyQt5.QtGui import QColor, QTextCharFormat, QFont, QSyntaxHighlighter
 
 
@@ -40,19 +40,21 @@ class MintSyntaxHighlighter(QSyntaxHighlighter):
             "show", "tables", "describe", "index", "on", "primary", "key", "auto_increment",
         ]
         for word in keywords:
-            self.rules.append((QRegExp(fr"\b{word}\b",), keyword_fmt))
-            self.rules.append((QRegExp(fr"\b{word.upper()}\b",), keyword_fmt))
+            pattern = QRegExp(fr"\b{word}\b")
+            pattern.setCaseSensitivity(Qt.CaseInsensitive)
+            self.rules.append((pattern, keyword_fmt))
 
         for t in ["int", "float", "string", "char", "bool", "list", "table"]:
             self.rules.append((QRegExp(fr"\b{t}\b"), type_fmt))
 
         self.rules.extend([
-            (QRegExp(r'"[^"\\]*(\\.[^"\\]*)*"'), string_fmt),
-            (QRegExp(r"'[^'\\]*(\\.[^'\\]*)*'"), string_fmt),
+            (QRegExp(r'"[^"\\]*(\\[ntr"\\]|[^"\\])*"'), string_fmt),
+            (QRegExp(r"'[^'\\]*(\\[ntr'\\]|[^'\\])*'"), string_fmt),
             (QRegExp(r"\b\d+(\.\d+)?\b"), number_fmt),
             (QRegExp(r"//[^\n]*"), comment_fmt),
             (QRegExp(r"^\s*\"[^\n]*"), comment_fmt),
             (QRegExp(r"\bsystem\.[A-Za-z_][A-Za-z0-9_]*\b"), system_fmt),
+            (QRegExp(r"[+\-*/%=]|==|!=|<=|>=|<|>|="), keyword_fmt),
         ])
 
     def highlightBlock(self, text: str) -> None:

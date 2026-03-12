@@ -7,6 +7,7 @@ class TokenType(Enum):
     MINUS = auto()
     STAR = auto()
     SLASH = auto()
+    MOD = auto()
     LPAREN = auto()
     RPAREN = auto()
     LBRACKET = auto()

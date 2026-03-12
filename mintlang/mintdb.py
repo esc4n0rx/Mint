@@ -181,6 +181,19 @@ class MintDB:
     def append_record(self, table_name: str, record: Dict[str, Any], *, enforce_primary_key: bool = True, operation: str = "APPEND") -> None:
         def _op() -> None:
             meta = self._table_meta(table_name)
+            schema = self.schemas.get(table_name, {"columns": []})
+            for col in schema.get("columns", []):
+                if not col.get("auto_increment"):
+                    continue
+                name = col["name"]
+                if record.get(name) is not None:
+                    continue
+                max_id = 0
+                for row in self.select(table_name):
+                    value = row.get(name)
+                    if isinstance(value, int) and value > max_id:
+                        max_id = value
+                record[name] = max_id + 1
             if enforce_primary_key and not record.get("__deleted__", False):
                 self._validate_primary_key_on_append(table_name, record, operation)
             rec_bytes = json.dumps(record, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
@@ -307,7 +320,19 @@ class MintDB:
                 for row in rows:
                     new_db.append_record(tname, row, operation="COMPACT_REWRITE")
             new_db.close()
+            old_lock_fd = self._lock_fd
+            old_lock_path = self._lock_path
+            self._lock_fd = None
+            self._lock_path = None
+            if old_lock_fd is not None:
+                os.close(old_lock_fd)
+            if old_lock_path and old_lock_path.exists():
+                try:
+                    old_lock_path.unlink()
+                except OSError:
+                    pass
             os.replace(tmp, old_path)
+            self._acquire_lock(old_path)
             with old_path.open("rb") as f:
                 raw = f.read(HEADER_SIZE)
             self.header = self._unpack_header(raw)
