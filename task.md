@@ -216,3 +216,14 @@ Registro consolidado das funcionalidades implementadas.
 - IDE atualizada para respeitar severidade real do linter nos diagnósticos.
 - Documentação MintDB atualizada e novos exemplos em `examples/mintdb/` para casos válidos, erros de integridade e fluxo mais seguro.
 - Testes automatizados adicionados em `tests/test_mintdb_beta1_integrity.py` cobrindo constraints, reabertura e warnings estáticos.
+
+## 2026-03-12 — Feature: MintDB Beta 2
+- Índices nativos persistidos (PK + `INDEX CREATE`) com uso real em lookup de igualdade.
+- Comandos de inspeção `SHOW TABLES` e `DESCRIBE`.
+- Suporte a `SELECT COUNT(*) ... INTO`.
+- `DB COMPACT` com reescrita segura em arquivo temporário e troca atômica.
+- File lock exclusivo de escrita (`.lock`) e liberação no encerramento.
+- Journal (`.journal`) para operações críticas e bloqueio seguro no recovery.
+- Validação estrutural aprofundada de blocos, offsets, encadeamento e consistência de índices.
+- Documentação Beta 2 em `docs/mintdb_beta2.md` e exemplos em `examples/mintdb_beta2/`.
+- Testes automatizados Beta 2 em `tests/test_mintdb_beta2.py`.

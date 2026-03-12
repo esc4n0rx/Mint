@@ -139,6 +139,7 @@ endprogram.
             ])
             db.append_record("clients", {"id": 1})
 
+            db.close()
             db2 = MintDB()
             db2.open(db_path)
             with self.assertRaises(RuntimeMintError):

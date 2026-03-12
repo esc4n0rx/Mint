@@ -73,20 +73,24 @@ initialization.
 endprogram.
 ```
 """,
-    "MintDB (beta)": """# MintDB (beta)
+    "MintDB Beta 2": """# MintDB Beta 2
 ```mint
 program init.
   var results type list<Client>.
+  var total type int = 0.
 initialization.
   DB CREATE "clientes.mintdb".
   DB OPEN "clientes.mintdb".
 
-  TABLE CREATE clients (id int PRIMARY KEY, name string, age int).
-  APPEND INTO clients VALUES (id = 1, name = "Ana", age = 30).
-  SELECT * FROM clients WHERE age > 18 INTO results.
+  TABLE CREATE clients (id int PRIMARY KEY, email string, name string, age int).
+  INDEX CREATE idx_clients_email ON clients (email).
 
-  UPDATE clients SET age = 31 WHERE id == 1.
-  DELETE FROM clients WHERE id == 1.
+  APPEND INTO clients VALUES (id = 1, email = "ana@mint.dev", name = "Ana", age = 30).
+  SHOW TABLES.
+  DESCRIBE clients.
+  SELECT COUNT(*) FROM clients INTO total.
+  SELECT * FROM clients WHERE email == "ana@mint.dev" INTO results.
+  DB COMPACT.
 endprogram.
 ```
 """,
@@ -108,19 +112,25 @@ endprogram.
 
 EXAMPLE_SNIPPET = """STRUCT Client.
   id type int.
+  email type string.
   name type string.
   age type int.
 ENDSTRUCT.
 
 program init.
   var out type list<Client>.
+  var total type int = 0.
 initialization.
   DB CREATE "demo.mintdb".
   DB OPEN "demo.mintdb".
-  TABLE CREATE clients (id int PRIMARY KEY, name string, age int).
-  APPEND INTO clients VALUES (id = 1, name = "Ana", age = 30).
-  SELECT * FROM clients INTO out.
-  write(count(out)).
+  TABLE CREATE clients (id int PRIMARY KEY, email string, name string, age int).
+  INDEX CREATE idx_clients_email ON clients (email).
+  APPEND INTO clients VALUES (id = 1, email = "ana@mint.dev", name = "Ana", age = 30).
+  SHOW TABLES.
+  DESCRIBE clients.
+  SELECT COUNT(*) FROM clients INTO total.
+  SELECT * FROM clients WHERE email == "ana@mint.dev" INTO out.
+  DB COMPACT.
 endprogram.
 """
 

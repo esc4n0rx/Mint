@@ -180,6 +180,11 @@ class DbOpenStmt(Stmt):
 
 
 @dataclass
+class DbCompactStmt(Stmt):
+    pass
+
+
+@dataclass
 class ColumnDef:
     name: str
     col_type: MintType
@@ -224,6 +229,31 @@ class UpdateStmt(Stmt):
 class DeleteStmt(Stmt):
     table_name: str
     condition: Expr
+
+
+@dataclass
+class ShowTablesStmt(Stmt):
+    destination: Optional[str] = None
+
+
+@dataclass
+class DescribeStmt(Stmt):
+    table_name: str
+    destination: Optional[str] = None
+
+
+@dataclass
+class IndexCreateStmt(Stmt):
+    index_name: str
+    table_name: str
+    column_name: str
+
+
+@dataclass
+class SelectCountStmt(Stmt):
+    table_name: str
+    condition: Optional[Expr]
+    destination: str
 
 @dataclass
 class LoadStmt(Stmt):

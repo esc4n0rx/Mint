@@ -77,7 +77,7 @@
       "patterns": [
         {
           "name": "keyword.control.mint",
-          "match": "\\b(program|init|initialization|endprogram|if|elseif|else|endif|while|endwhile|for|in|endfor|try|catch|endtry|func|endfunc|return|returns|input|move|to|load|save|export|query|from|where|into|LOAD|SAVE|EXPORT|TO|QUERY|FROM|WHERE|INTO|FOR|IN|ENDFOR|TRY|CATCH|ENDTRY|struct|endstruct|STRUCT|ENDSTRUCT|add|insert|size|count|sum|avg|db|create|open|append|values|select|update|set|delete|primary|key|auto_increment|DB|CREATE|OPEN|APPEND|VALUES|SELECT|UPDATE|SET|DELETE|PRIMARY|KEY|AUTO_INCREMENT|import|IMPORT)\\b"
+          "match": "\\b(program|init|initialization|endprogram|if|elseif|else|endif|while|endwhile|for|in|endfor|try|catch|endtry|func|endfunc|return|returns|input|move|to|load|save|export|query|from|where|into|LOAD|SAVE|EXPORT|TO|QUERY|FROM|WHERE|INTO|FOR|IN|ENDFOR|TRY|CATCH|ENDTRY|struct|endstruct|STRUCT|ENDSTRUCT|add|insert|size|count|sum|avg|db|create|open|append|values|select|update|set|delete|primary|key|auto_increment|show|tables|describe|index|on|compact|DB|CREATE|OPEN|APPEND|VALUES|SELECT|UPDATE|SET|DELETE|PRIMARY|KEY|AUTO_INCREMENT|SHOW|TABLES|DESCRIBE|INDEX|ON|COMPACT|import|IMPORT)\\b"
         },
         {
           "name": "keyword.operator.logical.mint",
@@ -93,7 +93,7 @@
         },
         {
           "name": "support.function.mint",
-          "match": "\\b(write|input|move|to|load|save|export|query|from|where|into|add|insert|size|count|sum|avg|db|create|open|append|values|select|update|set|delete|primary|key|auto_increment|DB|CREATE|OPEN|APPEND|VALUES|SELECT|UPDATE|SET|DELETE|PRIMARY|KEY|AUTO_INCREMENT|import|IMPORT)\\b"
+          "match": "\\b(write|input|move|to|load|save|export|query|from|where|into|add|insert|size|count|sum|avg|db|create|open|append|values|select|update|set|delete|primary|key|auto_increment|show|tables|describe|index|on|compact|DB|CREATE|OPEN|APPEND|VALUES|SELECT|UPDATE|SET|DELETE|PRIMARY|KEY|AUTO_INCREMENT|SHOW|TABLES|DESCRIBE|INDEX|ON|COMPACT|import|IMPORT)\\b"
         }
       ]
     },
