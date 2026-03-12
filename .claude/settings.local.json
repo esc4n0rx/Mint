@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m mintlang.cli -file examples/mintdb_crud/main.mint)",
+      "Bash(python -m mintlang.cli -file examples/mintdb_crud/client_reports.mint)",
+      "Bash(python -m mintlang.cli -file examples/mintdb_crud/client_helpers.mint)",
+      "Bash(python -c \":*)"
+    ]
+  }
+}
