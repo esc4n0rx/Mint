@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional, List
 from pathlib import Path
 from .ast_nodes import (
     Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, TryCatchStmt, ReturnStmt, CallStmt,
-    DbCreateStmt, DbOpenStmt, TableCreateStmt, AppendValuesStmt, AppendStructStmt, SelectStmt, UpdateStmt, DeleteStmt,
+    DbCreateStmt, DbOpenStmt, DbCompactStmt, ShowTablesStmt, DescribeStmt, IndexCreateStmt, SelectCountStmt, TableCreateStmt, AppendValuesStmt, AppendStructStmt, SelectStmt, UpdateStmt, DeleteStmt,
     FuncDecl, StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall, CountExpr, SumExpr, AvgExpr,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
@@ -43,17 +43,20 @@ class Interpreter:
         self.db = MintDB()
 
     def run(self, program: Program) -> None:
-        for struct in program.structs:
-            self._register_struct(struct)
+        try:
+            for struct in program.structs:
+                self._register_struct(struct)
 
-        for func in program.funcs:
-            self.funcs[func.name] = func
+            for func in program.funcs:
+                self.funcs[func.name] = func
 
-        for decl in program.decls:
-            self._exec_decl(decl)
+            for decl in program.decls:
+                self._exec_decl(decl)
 
-        for stmt in program.body:
-            self._exec_stmt(stmt)
+            for stmt in program.body:
+                self._exec_stmt(stmt)
+        finally:
+            self.db.close()
 
     def _register_struct(self, decl: StructDecl) -> None:
         fields: Dict[str, MintType] = {}
@@ -151,9 +154,15 @@ class Interpreter:
         if isinstance(stmt, DbOpenStmt):
             self.db.open(stmt.path)
             return
+        if isinstance(stmt, DbCompactStmt):
+            self.db.compact()
+            return
         if isinstance(stmt, TableCreateStmt):
             cols = [{"name": c.name, "type": c.col_type, "primary_key": c.primary_key, "auto_increment": c.auto_increment} for c in stmt.columns]
             self.db.create_table(stmt.table_name, cols)
+            return
+        if isinstance(stmt, IndexCreateStmt):
+            self.db.create_index(stmt.index_name, stmt.table_name, stmt.column_name)
             return
         if isinstance(stmt, AppendValuesStmt):
             rec = {k: self._eval(v) for k, v in stmt.assignments}
@@ -164,6 +173,50 @@ class Interpreter:
             if not isinstance(v, dict) or "fields" not in v:
                 raise RuntimeMintError("APPEND STRUCT exige variável struct válida.")
             self.db.append_record(stmt.table_name, dict(v["fields"]), operation="APPEND STRUCT")
+            return
+        if isinstance(stmt, ShowTablesStmt):
+            rows = self.db.show_tables()
+            if stmt.destination:
+                self._assign_value(stmt.destination, rows)
+            else:
+                for row in rows:
+                    print(f"- {row['table']} (active={row['active_records']}, removed={row['removed_records']})")
+            return
+        if isinstance(stmt, DescribeStmt):
+            data = self.db.describe_table(stmt.table_name)
+            if stmt.destination:
+                self._assign_value(stmt.destination, data)
+            else:
+                print(f"TABLE {data['table']} (id={data['table_id']})")
+                for c in data['columns']:
+                    flags = []
+                    if c.get('primary_key'):
+                        flags.append('PRIMARY KEY')
+                    if c.get('auto_increment'):
+                        flags.append('AUTO_INCREMENT')
+                    print(f"  - {c['name']} {c['type']} {' '.join(flags)}")
+                for idx in data['indexes']:
+                    print(f"  INDEX {idx['name']} ON {idx['column']}")
+            return
+        if isinstance(stmt, SelectCountStmt):
+            if stmt.condition is None:
+                total = self.db.count_records(stmt.table_name)
+                self._assign_value(stmt.destination, total)
+                return
+            rows = self.db.select(stmt.table_name)
+            count = 0
+            for r in rows:
+                scope = Scope(types={k: self._infer_runtime_type(v) for k, v in r.items()}, env=dict(r))
+                self._push_scope(scope)
+                try:
+                    ok = self._eval(stmt.condition)
+                finally:
+                    self._pop_scope()
+                if not isinstance(ok, bool):
+                    raise RuntimeMintError("WHERE do SELECT COUNT deve resultar em bool.")
+                if ok:
+                    count += 1
+            self._assign_value(stmt.destination, count)
             return
         if isinstance(stmt, SelectStmt):
             rows = self.db.select(stmt.table_name)

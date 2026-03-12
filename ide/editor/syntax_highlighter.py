@@ -36,8 +36,8 @@ class MintSyntaxHighlighter(QSyntaxHighlighter):
             "load", "save", "export", "struct", "endstruct", "add", "insert", "size",
             "for", "in", "endfor", "try", "catch", "endtry", "import", "and", "or", "not",
             "count", "sum", "avg", "true", "false",
-            "db", "create", "open", "append", "values", "select", "update", "set", "delete",
-            "primary", "key", "auto_increment",
+            "db", "create", "open", "compact", "append", "values", "select", "update", "set", "delete",
+            "show", "tables", "describe", "index", "on", "primary", "key", "auto_increment",
         ]
         for word in keywords:
             self.rules.append((QRegExp(fr"\b{word}\b",), keyword_fmt))

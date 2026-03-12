@@ -4,7 +4,7 @@ from .tokens import Token, TokenType
 from .errors import ParserError
 from .ast_nodes import (
     Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, TryCatchStmt, ReturnStmt, CallStmt,
-    DbCreateStmt, DbOpenStmt, ColumnDef, TableCreateStmt, AppendValuesStmt, AppendStructStmt, SelectStmt, UpdateStmt, DeleteStmt,
+    DbCreateStmt, DbOpenStmt, DbCompactStmt, ShowTablesStmt, DescribeStmt, IndexCreateStmt, SelectCountStmt, ColumnDef, TableCreateStmt, AppendValuesStmt, AppendStructStmt, SelectStmt, UpdateStmt, DeleteStmt,
     FuncDecl, FuncParam, StructDecl, StructField, ImportDecl,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, FieldAccessExpr, IndexAccessExpr, SizeCall, CountExpr, SumExpr, AvgExpr, Binary, Unary, CallExpr, MintType
 )
@@ -262,7 +262,10 @@ class Parser:
                 path = self._consume(TokenType.STRING, "DB OPEN exige caminho string.").lexeme
                 self._consume(TokenType.DOT, "Faltou '.' no fim do DB OPEN.")
                 return DbOpenStmt(path=path)
-            raise ParserError("Comando DB inválido. Use DB CREATE ou DB OPEN.")
+            if self._match(TokenType.COMPACT):
+                self._consume(TokenType.DOT, "Faltou '.' no fim do DB COMPACT.")
+                return DbCompactStmt()
+            raise ParserError("Comando DB inválido. Use DB CREATE, DB OPEN ou DB COMPACT.")
 
         if self._match(TokenType.TABLE):
             self._consume(TokenType.CREATE, "Esperado CREATE após TABLE.")
@@ -310,6 +313,19 @@ class Parser:
             return AppendValuesStmt(table_name=table_name, assignments=assigns)
 
         if self._match(TokenType.SELECT):
+            if self._match(TokenType.COUNT):
+                self._consume(TokenType.LPAREN, "Esperado '(' em COUNT.")
+                self._consume(TokenType.STAR, "COUNT na Beta 2 suporta apenas COUNT(*).")
+                self._consume(TokenType.RPAREN, "Esperado ')' em COUNT.")
+                self._consume(TokenType.FROM, "Esperado FROM no SELECT COUNT.")
+                table_name = self._consume(TokenType.IDENT, "Esperado tabela no SELECT COUNT.").lexeme
+                cond = None
+                if self._match(TokenType.WHERE):
+                    cond = self._expression()
+                self._consume(TokenType.INTO, "Esperado INTO no SELECT COUNT.")
+                dest = self._consume(TokenType.IDENT, "Esperado destino no SELECT COUNT.").lexeme
+                self._consume(TokenType.DOT, "Faltou '.' no fim do SELECT COUNT.")
+                return SelectCountStmt(table_name=table_name, condition=cond, destination=dest)
             columns: List[str] = []
             if self._match(TokenType.STAR):
                 columns = ["*"]
@@ -350,6 +366,33 @@ class Parser:
             cond = self._expression()
             self._consume(TokenType.DOT, "Faltou '.' no fim do DELETE.")
             return DeleteStmt(table_name=table_name, condition=cond)
+
+        if self._match(TokenType.SHOW):
+            self._consume(TokenType.TABLES, "Esperado TABLES após SHOW.")
+            dest = None
+            if self._match(TokenType.INTO):
+                dest = self._consume(TokenType.IDENT, "Esperado destino no SHOW TABLES.").lexeme
+            self._consume(TokenType.DOT, "Faltou '.' no fim do SHOW TABLES.")
+            return ShowTablesStmt(destination=dest)
+
+        if self._match(TokenType.DESCRIBE):
+            table_name = self._consume(TokenType.IDENT, "Esperado tabela no DESCRIBE.").lexeme
+            dest = None
+            if self._match(TokenType.INTO):
+                dest = self._consume(TokenType.IDENT, "Esperado destino no DESCRIBE.").lexeme
+            self._consume(TokenType.DOT, "Faltou '.' no fim do DESCRIBE.")
+            return DescribeStmt(table_name=table_name, destination=dest)
+
+        if self._match(TokenType.INDEX):
+            self._consume(TokenType.CREATE, "Esperado CREATE após INDEX.")
+            idx_name = self._consume(TokenType.IDENT, "Esperado nome do índice.").lexeme
+            self._consume(TokenType.ON, "Esperado ON no INDEX CREATE.")
+            table_name = self._consume(TokenType.IDENT, "Esperado tabela no INDEX CREATE.").lexeme
+            self._consume(TokenType.LPAREN, "Esperado '(' no INDEX CREATE.")
+            column_name = self._consume(TokenType.IDENT, "Esperado coluna no INDEX CREATE.").lexeme
+            self._consume(TokenType.RPAREN, "Esperado ')' no INDEX CREATE.")
+            self._consume(TokenType.DOT, "Faltou '.' no fim do INDEX CREATE.")
+            return IndexCreateStmt(index_name=idx_name, table_name=table_name, column_name=column_name)
 
         if self._match(TokenType.IF):
             return self._if_stmt()

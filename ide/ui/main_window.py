@@ -176,6 +176,12 @@ class MainWindow(QMainWindow):
         self.project.set_last_workspace(str(ws))
 
     def open_file(self, file_path: str):
+        existing = self.editor_tabs.index_of_path(file_path)
+        if existing >= 0:
+            self.editor_tabs.setCurrentIndex(existing)
+            self.status.set_file(file_path)
+            return
+
         try:
             content = self.files.read_text(file_path)
         except Exception as exc:  # pylint: disable=broad-except
@@ -260,13 +266,17 @@ class MainWindow(QMainWindow):
             editor.set_diagnostics(diagnostics)
 
     def _set_diagnostics(self, diagnostics: list[Diagnostic]):
-        self.problems_table.setRowCount(0)
-        for diag in diagnostics:
-            row = self.problems_table.rowCount()
-            self.problems_table.insertRow(row)
-            values = [diag.severity, diag.message, diag.file_path, str(diag.line), str(diag.column), diag.suggestion]
-            for col, value in enumerate(values):
-                self.problems_table.setItem(row, col, QTableWidgetItem(value))
+        self.problems_table.setUpdatesEnabled(False)
+        try:
+            self.problems_table.setRowCount(0)
+            for diag in diagnostics:
+                row = self.problems_table.rowCount()
+                self.problems_table.insertRow(row)
+                values = [diag.severity, diag.message, diag.file_path, str(diag.line), str(diag.column), diag.suggestion]
+                for col, value in enumerate(values):
+                    self.problems_table.setItem(row, col, QTableWidgetItem(value))
+        finally:
+            self.problems_table.setUpdatesEnabled(True)
 
     def _go_to_problem(self, row: int, _col: int):
         file_path = self.problems_table.item(row, 2).text()
@@ -310,7 +320,9 @@ class MainWindow(QMainWindow):
         target = Path(base_path)
         if target.is_file():
             target = target.parent
-        self.files.write_text(str(target / name), "")
+        target_file = target / name
+        self.files.write_text(str(target_file), "")
+        self.open_file(str(target_file))
 
     def _create_folder(self, base_path: str):
         name, ok = QInputDialog.getText(self, "Nova pasta", "Nome da pasta")

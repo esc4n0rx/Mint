@@ -37,7 +37,7 @@ Também há campos de configuração para caminhos de runtime/linter no diálogo
 
 - Workspace com explorer de arquivos e ações de criação/renomeação/exclusão.
 - Editor com abas múltiplas, line numbers, highlight de linha atual, auto-indent e sintaxe Mint.
-- Highlight atualizado para comandos MintDB beta (`DB CREATE/OPEN`, `TABLE CREATE`, `APPEND`, `SELECT`, `UPDATE`, `DELETE`).
+- Highlight atualizado para comandos MintDB Beta 2 (`DB COMPACT`, `SHOW TABLES`, `DESCRIBE`, `INDEX CREATE`, `SELECT COUNT(*)`, além dos comandos Beta 1).
 - Fluxos de abrir/salvar/salvar como/salvar todos.
 - Execução do arquivo atual com output assíncrono.
 - Lint do arquivo atual com painel de problemas e navegação por clique.
@@ -45,6 +45,10 @@ Também há campos de configuração para caminhos de runtime/linter no diálogo
 - Status bar com arquivo atual, cursor e workspace.
 - Atalhos principais (`Ctrl+N`, `Ctrl+O`, `Ctrl+Shift+O`, `Ctrl+S`, `Ctrl+Shift+S`, `F5`, `F8`).
 - Settings persistentes via `QSettings`.
+- Explorer otimizado para workspaces grandes (apenas coluna de nome, menor custo de render e root path consistente).
+- Abertura de arquivo evita recarregar conteúdo quando o arquivo já está aberto em aba.
+- Correção no menu de contexto: criar novo arquivo/pasta agora respeita corretamente a pasta selecionada.
+
 
 ## Próximos passos sugeridos
 
@@ -65,5 +69,7 @@ Também há campos de configuração para caminhos de runtime/linter no diálogo
 
 ## Novidades (2026-03-12)
 
-- IDE atualizada para suportar os comandos da feature MintDB beta no syntax highlight.
-- Guia **Aprender Mint** com seção MintDB e snippet pronto para testes de persistência local.
+- IDE atualizada para suportar fluxos MintDB Beta 2 no syntax highlight e no guia **Aprender Mint**.
+- Snippet educacional atualizado com `INDEX CREATE`, `SHOW TABLES`, `DESCRIBE`, `SELECT COUNT(*)` e `DB COMPACT`.
+- Correções de performance no explorer e abertura de arquivos em projetos grandes.
+- Correção de UX: criação por clique direito respeitando a pasta alvo selecionada.

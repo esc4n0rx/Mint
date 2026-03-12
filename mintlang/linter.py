@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 from .ast_nodes import (
     Program, VarDeclStmt, WriteStmt, AddStmt, InsertStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, TryCatchStmt, ReturnStmt, CallStmt,
-    DbCreateStmt, DbOpenStmt, TableCreateStmt, AppendValuesStmt, AppendStructStmt, SelectStmt, UpdateStmt, DeleteStmt, FuncDecl, Stmt,
+    DbCreateStmt, DbOpenStmt, DbCompactStmt, ShowTablesStmt, DescribeStmt, IndexCreateStmt, SelectCountStmt, TableCreateStmt, AppendValuesStmt, AppendStructStmt, SelectStmt, UpdateStmt, DeleteStmt, FuncDecl, Stmt,
     StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall, CountExpr, SumExpr, AvgExpr,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
@@ -255,6 +255,26 @@ class Linter:
         if isinstance(stmt, DbOpenStmt):
             return
 
+        if isinstance(stmt, DbCompactStmt):
+            return
+
+        if isinstance(stmt, ShowTablesStmt):
+            if stmt.destination is not None:
+                dt = sym.get(stmt.destination)
+                if dt is None:
+                    issues.append(LintIssue(f"Variável de destino não declarada: '{stmt.destination}'."))
+            return
+
+        if isinstance(stmt, DescribeStmt):
+            if stmt.destination is not None:
+                dt = sym.get(stmt.destination)
+                if dt is None:
+                    issues.append(LintIssue(f"Variável de destino não declarada: '{stmt.destination}'."))
+            return
+
+        if isinstance(stmt, IndexCreateStmt):
+            return
+
         if isinstance(stmt, TableCreateStmt):
             if not stmt.columns:
                 issues.append(LintIssue("TABLE CREATE exige ao menos uma coluna."))
@@ -278,6 +298,18 @@ class Linter:
             t = sym.get(stmt.struct_var)
             if t is None or t not in structs:
                 issues.append(LintIssue("APPEND STRUCT exige variável de struct válida."))
+            return
+
+        if isinstance(stmt, SelectCountStmt):
+            dest_type = sym.get(stmt.destination)
+            if dest_type is None:
+                issues.append(LintIssue(f"Destino '{stmt.destination}' não declarado."))
+            elif dest_type != "int":
+                issues.append(LintIssue("INTO do SELECT COUNT(*) deve ser int."))
+            if stmt.condition is not None:
+                ctype = self._infer_type(stmt.condition, sym, funcs, structs, issues)
+                if ctype is not None and ctype != "bool":
+                    issues.append(LintIssue("WHERE do SELECT COUNT deve resultar em bool."))
             return
 
         if isinstance(stmt, SelectStmt):
