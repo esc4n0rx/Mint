@@ -4,6 +4,7 @@ from .tokens import Token, TokenType
 from .errors import ParserError
 from .ast_nodes import (
     Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, TryCatchStmt, ReturnStmt, CallStmt,
+    DbCreateStmt, DbOpenStmt, ColumnDef, TableCreateStmt, AppendValuesStmt, AppendStructStmt, SelectStmt, UpdateStmt, DeleteStmt,
     FuncDecl, FuncParam, StructDecl, StructField, ImportDecl,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, FieldAccessExpr, IndexAccessExpr, SizeCall, CountExpr, SumExpr, AvgExpr, Binary, Unary, CallExpr, MintType
 )
@@ -251,6 +252,104 @@ class Parser:
             destination = self._consume(TokenType.IDENT, "Esperado nome da coleção de destino.").lexeme
             self._consume(TokenType.DOT, "Faltou '.' no fim da QUERY.")
             return QueryStmt(source=source, condition=condition, destination=destination)
+
+        if self._match(TokenType.DB):
+            if self._match(TokenType.CREATE):
+                path = self._consume(TokenType.STRING, "DB CREATE exige caminho string.").lexeme
+                self._consume(TokenType.DOT, "Faltou '.' no fim do DB CREATE.")
+                return DbCreateStmt(path=path)
+            if self._match(TokenType.OPEN):
+                path = self._consume(TokenType.STRING, "DB OPEN exige caminho string.").lexeme
+                self._consume(TokenType.DOT, "Faltou '.' no fim do DB OPEN.")
+                return DbOpenStmt(path=path)
+            raise ParserError("Comando DB inválido. Use DB CREATE ou DB OPEN.")
+
+        if self._match(TokenType.TABLE):
+            self._consume(TokenType.CREATE, "Esperado CREATE após TABLE.")
+            table_name = self._consume(TokenType.IDENT, "Esperado nome da tabela.").lexeme
+            self._consume(TokenType.LPAREN, "Esperado '(' em TABLE CREATE.")
+            cols: List[ColumnDef] = []
+            while not self._check(TokenType.RPAREN):
+                col_name = self._consume(TokenType.IDENT, "Esperado nome da coluna.").lexeme
+                col_type = self._parse_primitive_type()
+                primary = False
+                auto = False
+                if self._match(TokenType.PRIMARY):
+                    self._consume(TokenType.KEY, "Esperado KEY após PRIMARY.")
+                    primary = True
+                if self._match(TokenType.AUTO_INCREMENT):
+                    auto = True
+                cols.append(ColumnDef(name=col_name, col_type=col_type, primary_key=primary, auto_increment=auto))
+                if not self._match(TokenType.COMMA):
+                    break
+            self._consume(TokenType.RPAREN, "Esperado ')' em TABLE CREATE.")
+            self._consume(TokenType.DOT, "Faltou '.' no fim do TABLE CREATE.")
+            return TableCreateStmt(table_name=table_name, columns=cols)
+
+        if self._match(TokenType.APPEND):
+            if self._match(TokenType.STRUCT):
+                struct_var = self._consume(TokenType.IDENT, "Esperado variável de struct no APPEND STRUCT.").lexeme
+                self._consume(TokenType.INTO, "Esperado INTO no APPEND STRUCT.")
+                table_name = self._consume(TokenType.IDENT, "Esperado tabela destino no APPEND STRUCT.").lexeme
+                self._consume(TokenType.DOT, "Faltou '.' no fim do APPEND STRUCT.")
+                return AppendStructStmt(struct_var=struct_var, table_name=table_name)
+            self._consume(TokenType.INTO, "Esperado INTO no APPEND.")
+            table_name = self._consume(TokenType.IDENT, "Esperado nome da tabela no APPEND.").lexeme
+            self._consume(TokenType.VALUES, "Esperado VALUES no APPEND.")
+            self._consume(TokenType.LPAREN, "Esperado '(' após VALUES.")
+            assigns: List[tuple[str, Expr]] = []
+            while not self._check(TokenType.RPAREN):
+                n = self._consume(TokenType.IDENT, "Esperado coluna em APPEND VALUES.").lexeme
+                self._consume(TokenType.EQUAL, "Esperado '=' em APPEND VALUES.")
+                e = self._expression()
+                assigns.append((n, e))
+                if not self._match(TokenType.COMMA):
+                    break
+            self._consume(TokenType.RPAREN, "Esperado ')' no APPEND VALUES.")
+            self._consume(TokenType.DOT, "Faltou '.' no fim do APPEND.")
+            return AppendValuesStmt(table_name=table_name, assignments=assigns)
+
+        if self._match(TokenType.SELECT):
+            columns: List[str] = []
+            if self._match(TokenType.STAR):
+                columns = ["*"]
+            else:
+                columns.append(self._consume(TokenType.IDENT, "Esperado coluna no SELECT.").lexeme)
+                while self._match(TokenType.COMMA):
+                    columns.append(self._consume(TokenType.IDENT, "Esperado coluna no SELECT.").lexeme)
+            self._consume(TokenType.FROM, "Esperado FROM no SELECT.")
+            table_name = self._consume(TokenType.IDENT, "Esperado tabela no SELECT.").lexeme
+            cond = None
+            if self._match(TokenType.WHERE):
+                cond = self._expression()
+            self._consume(TokenType.INTO, "Esperado INTO no SELECT.")
+            dest = self._consume(TokenType.IDENT, "Esperado destino no SELECT.").lexeme
+            self._consume(TokenType.DOT, "Faltou '.' no fim do SELECT.")
+            return SelectStmt(table_name=table_name, columns=columns, condition=cond, destination=dest)
+
+        if self._match(TokenType.UPDATE):
+            table_name = self._consume(TokenType.IDENT, "Esperado tabela no UPDATE.").lexeme
+            self._consume(TokenType.SET, "Esperado SET no UPDATE.")
+            assigns: List[tuple[str, Expr]] = []
+            n = self._consume(TokenType.IDENT, "Esperado coluna no UPDATE.").lexeme
+            self._consume(TokenType.EQUAL, "Esperado '=' no UPDATE.")
+            assigns.append((n, self._expression()))
+            while self._match(TokenType.COMMA):
+                n = self._consume(TokenType.IDENT, "Esperado coluna no UPDATE.").lexeme
+                self._consume(TokenType.EQUAL, "Esperado '=' no UPDATE.")
+                assigns.append((n, self._expression()))
+            self._consume(TokenType.WHERE, "Esperado WHERE no UPDATE.")
+            cond = self._expression()
+            self._consume(TokenType.DOT, "Faltou '.' no fim do UPDATE.")
+            return UpdateStmt(table_name=table_name, assignments=assigns, condition=cond)
+
+        if self._match(TokenType.DELETE):
+            self._consume(TokenType.FROM, "Esperado FROM no DELETE.")
+            table_name = self._consume(TokenType.IDENT, "Esperado tabela no DELETE.").lexeme
+            self._consume(TokenType.WHERE, "Esperado WHERE no DELETE.")
+            cond = self._expression()
+            self._consume(TokenType.DOT, "Faltou '.' no fim do DELETE.")
+            return DeleteStmt(table_name=table_name, condition=cond)
 
         if self._match(TokenType.IF):
             return self._if_stmt()

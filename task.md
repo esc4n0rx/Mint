@@ -193,3 +193,17 @@ Registro consolidado das funcionalidades implementadas.
 - CRUD completo com persistência CSV em `examples/customer_crud/data/clients.csv`.
 - Demonstrações práticas de `QUERY`, `FOR`, agregações (`count/sum/avg`), `TRY/CATCH` e variáveis sistêmicas (`system.datetime`).
 - README do exemplo com instruções de execução, estrutura e objetivos didáticos.
+
+## 2026-03-12 — Feature: MintDB Beta (storage nativo .mintdb)
+- Implementado núcleo MintDB nativo em `mintlang/mintdb.py` com:
+  - header binário fixo, assinatura/magic e versão;
+  - catálogo persistido com metadados de tabelas e schemas;
+  - blocos de dados append-only com checksums por bloco;
+  - checksum global do arquivo para detectar adulteração manual/corrupção;
+  - CRUD beta com tombstone lógico para update/delete.
+- Parser/AST/linter/interpreter integrados com comandos:
+  - `DB CREATE`, `DB OPEN`, `TABLE CREATE`, `APPEND`, `SELECT ... WHERE ... INTO`, `UPDATE`, `DELETE`.
+- Runtime integrado para persistir/cararregar dados via MintDB sem banco externo.
+- Highlighter VS Code atualizado com novas keywords de banco.
+- Documentação técnica criada em `docs/mintdb_beta.md`.
+- Exemplos adicionados em `examples/mintdb/` cobrindo fluxo de criação, append, select, update, delete e validação de abertura.

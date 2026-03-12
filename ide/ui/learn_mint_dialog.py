@@ -59,24 +59,42 @@ endfor.
 """,
     "Exemplos práticos": """# Exemplos práticos
 ```mint
-import core.math as math
+STRUCT Client.
+  id type int.
+  name type string.
+  age type int.
+ENDSTRUCT.
 
-let total = math.sum([10, 20, 30])
-print(total)
-import core.text.{upper, trim}
+program init.
+  var adults type list<Client>.
+initialization.
+  query from clients where age >= 18 into adults.
+  write(count(adults)).
+endprogram.
+```
+""",
+    "MintDB (beta)": """# MintDB (beta)
+```mint
+program init.
+  var results type list<Client>.
+initialization.
+  DB CREATE "clientes.mintdb".
+  DB OPEN "clientes.mintdb".
 
-let nome = trim("  paulo  ")
-print(upper(nome))
-try {
-    let dados = load_csv("clientes.csv")
-} catch {
-    print("erro ao carregar")
-}
+  TABLE CREATE clients (id int PRIMARY KEY, name string, age int).
+  APPEND INTO clients VALUES (id = 1, name = "Ana", age = 30).
+  SELECT * FROM clients WHERE age > 18 INTO results.
+
+  UPDATE clients SET age = 31 WHERE id == 1.
+  DELETE FROM clients WHERE id == 1.
+endprogram.
 ```
 """,
     "Dicas e erros comuns": """# Dicas e erros comuns
 - `MOVER` é inválido, use `move`.
 - `imprt` é inválido, use `import`.
+- `SELEC` é inválido, use `SELECT`.
+- `APEND` é inválido, use `APPEND`.
 - Blocos devem fechar: `if` com `endif`, `for` com `endfor`, etc.
 - Sempre finalize statements com `.` na sintaxe Mint atual.
 """,
@@ -88,10 +106,21 @@ try {
 """,
 }
 
-EXAMPLE_SNIPPET = """program init.
-  var nome type string = \"Mint\".
+EXAMPLE_SNIPPET = """STRUCT Client.
+  id type int.
+  name type string.
+  age type int.
+ENDSTRUCT.
+
+program init.
+  var out type list<Client>.
 initialization.
-  write(nome).
+  DB CREATE "demo.mintdb".
+  DB OPEN "demo.mintdb".
+  TABLE CREATE clients (id int PRIMARY KEY, name string, age int).
+  APPEND INTO clients VALUES (id = 1, name = "Ana", age = 30).
+  SELECT * FROM clients INTO out.
+  write(count(out)).
 endprogram.
 """
 
