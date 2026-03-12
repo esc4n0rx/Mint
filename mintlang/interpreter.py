@@ -12,6 +12,7 @@ from .ast_nodes import (
 )
 from .errors import RuntimeMintError
 from .mintdb import MintDB
+from .utils import extract_collection_inner, convert_string_to_type, serialize_value
 
 DEFAULTS: Dict[MintType, Any] = {
     "int": 0,
@@ -338,7 +339,7 @@ class Interpreter:
             local_scope = Scope(types={}, env={})
             for field_name, field_type in fields.items():
                 local_scope.types[field_name] = field_type
-                local_scope.env[field_name] = item["fields"][field_name]
+                local_scope.env[field_name] = item["fields"].get(field_name, self._default_value_for_type(field_type))
             self._push_scope(local_scope)
             try:
                 cond_val = self._eval(stmt.condition)
@@ -361,7 +362,7 @@ class Interpreter:
             raise RuntimeMintError("LOAD exige variável do tipo table<Struct> ou list<Struct>.")
 
         delimiter = self._delimiter_for_path(stmt.path)
-        rows = self._read_delimited_file(stmt.path, delimiter)
+        rows = self._read_delimited_file(self._safe_file_path(stmt.path), delimiter)
         header = rows[0] if rows else []
         self._validate_header(struct_name, header)
 
@@ -388,7 +389,7 @@ class Interpreter:
 
         fields = list(self.structs[struct_name].keys())
         delimiter = self._delimiter_for_path(path)
-        output_path = Path(path)
+        output_path = self._safe_file_path(path)
         if output_path.parent != Path('.'):
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -400,6 +401,14 @@ class Interpreter:
                     raise RuntimeMintError("Coleção contém item inválido para serialização.")
                 writer.writerow([self._serialize_field(item['fields'][name]) for name in fields])
 
+
+    def _safe_file_path(self, path: str) -> Path:
+        base = Path.cwd().resolve()
+        candidate = (base / path).resolve()
+        if candidate != base and base not in candidate.parents:
+            raise RuntimeMintError("Path inválido: acesso fora do diretório atual não é permitido.")
+        return candidate
+
     def _delimiter_for_path(self, path: str) -> str:
         suffix = Path(path).suffix.lower()
         if suffix == '.csv':
@@ -408,8 +417,8 @@ class Interpreter:
             return ';'
         raise RuntimeMintError("Formato de arquivo não suportado. Use .csv ou .txt.")
 
-    def _read_delimited_file(self, path: str, delimiter: str) -> List[List[str]]:
-        input_path = Path(path)
+    def _read_delimited_file(self, path: Path, delimiter: str) -> List[List[str]]:
+        input_path = path
         if not input_path.exists():
             raise RuntimeMintError(f"Arquivo não encontrado: {path}")
         with input_path.open('r', encoding='utf-8', newline='') as f:
@@ -439,34 +448,15 @@ class Interpreter:
         return {'__struct__': struct_name, 'fields': data}
 
     def _convert_loaded_value(self, raw: str, field_type: MintType, field_name: str) -> Any:
-        if field_type == 'string':
-            return raw
-        if field_type == 'int':
-            try:
-                return int(raw)
-            except ValueError:
-                raise RuntimeMintError(f"valor '{raw}' para campo {field_name} type int")
-        if field_type == 'float':
-            try:
-                return float(raw)
-            except ValueError:
-                raise RuntimeMintError(f"valor '{raw}' para campo {field_name} type float")
-        if field_type == 'bool':
-            if raw == 'true':
-                return True
-            if raw == 'false':
-                return False
-            raise RuntimeMintError(f"valor '{raw}' para campo {field_name} type bool")
-        if field_type == 'char':
-            if len(raw) != 1:
-                raise RuntimeMintError(f"valor '{raw}' para campo {field_name} type char")
-            return raw
-        raise RuntimeMintError(f"Tipo não suportado para LOAD: {field_type}.")
+        try:
+            return convert_string_to_type(raw, field_type, field_name)
+        except ValueError as exc:
+            raise RuntimeMintError(str(exc)) from exc
+
 
     def _serialize_field(self, val: Any) -> str:
-        if isinstance(val, bool):
-            return 'true' if val else 'false'
-        return str(val)
+        return serialize_value(val)
+
 
     def _resolve_input_target(self, target: Expr) -> tuple[str, MintType]:
         if isinstance(target, VarRef):
@@ -690,21 +680,32 @@ class Interpreter:
             if expr.op in ("==", "!=", "<", ">", "<=", ">="):
                 return self._eval_comparison(expr.op, left, right)
 
-            if not isinstance(left, (int, float)) or not isinstance(right, (int, float)):
-                raise RuntimeMintError(f"Operação '{expr.op}' requer int ou float em ambos os lados.")
-
             if expr.op == "+":
-                return left + right
+                if isinstance(left, str) and isinstance(right, str):
+                    return left + right
+                if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+                    return left + right
+                raise RuntimeMintError("Operação '+' requer números ou strings compatíveis.")
             if expr.op == "-":
-                return left - right
+                if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+                    return left - right
+                raise RuntimeMintError("Operação '-' requer int ou float em ambos os lados.")
             if expr.op == "*":
-                return left * right
+                if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+                    return left * right
+                raise RuntimeMintError("Operação '*' requer int ou float em ambos os lados.")
             if expr.op == "/":
                 if right == 0:
                     raise RuntimeMintError("Divisão por zero.")
-                if isinstance(left, float) or isinstance(right, float):
+                if isinstance(left, (int, float)) and isinstance(right, (int, float)):
                     return float(left) / float(right)
-                return left // right
+                raise RuntimeMintError("Operação '/' requer int ou float em ambos os lados.")
+            if expr.op == "%":
+                if not isinstance(left, int) or not isinstance(right, int):
+                    raise RuntimeMintError("Operação '%' requer int em ambos os lados.")
+                if right == 0:
+                    raise RuntimeMintError("Módulo por zero.")
+                return left % right
 
             raise RuntimeMintError(f"Operador inválido: {expr.op}")
 
@@ -912,7 +913,4 @@ class Interpreter:
         collection_val.append(self._ensure_type(collection_name, inner_type, value))
 
     def _extract_collection_inner(self, value_type: MintType, collection_name: str) -> Optional[MintType]:
-        prefix = f"{collection_name}<"
-        if not value_type.startswith(prefix) or not value_type.endswith(">"):
-            return None
-        return value_type[len(prefix):-1].strip()
+        return extract_collection_inner(value_type, collection_name)

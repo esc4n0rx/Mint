@@ -562,7 +562,7 @@ class Parser:
 
     def _factor(self) -> Expr:
         expr = self._unary()
-        while self._match(TokenType.STAR, TokenType.SLASH):
+        while self._match(TokenType.STAR, TokenType.SLASH, TokenType.MOD):
             op = self._previous().lexeme
             right = self._unary()
             expr = Binary(expr, op, right)

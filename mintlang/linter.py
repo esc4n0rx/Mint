@@ -7,23 +7,10 @@ from .ast_nodes import (
     StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall, CountExpr, SumExpr, AvgExpr,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
+from .utils import extract_collection_inner, is_struct_collection, SYSTEM_MEMBERS
 
 BUILTIN_TYPES = {"int", "float", "string", "char", "bool"}
 RESERVED_NAMESPACE = "system"
-SYSTEM_MEMBERS: Dict[str, MintType] = {
-    "date": "string",
-    "time": "string",
-    "datetime": "string",
-    "timestamp": "int",
-    "year": "int",
-    "month": "int",
-    "day": "int",
-    "weekday": "int",
-    "hour": "int",
-    "minute": "int",
-    "second": "int",
-}
-
 
 @dataclass
 class LintIssue:
@@ -186,6 +173,8 @@ class Linter:
             return
 
         if isinstance(stmt, InsertStmt):
+            if not isinstance(stmt.table, VarRef):
+                issues.append(LintIssue("insert exige coleção destino como variável (VarRef)."))
             table_type = self._infer_type(stmt.table, sym, funcs, structs, issues)
             value_type = self._infer_type(stmt.value, sym, funcs, structs, issues)
             inner_type = self._extract_collection_inner(table_type, "table")
@@ -541,6 +530,8 @@ class Linter:
             index_type = self._infer_type(expr.index, sym, funcs, structs, issues, query_struct_fields, query_struct_name)
             if index_type is not None and index_type != "int":
                 issues.append(LintIssue("Índice deve ser numérico (int)."))
+            if isinstance(expr.index, IntLit) and expr.index.value < 0:
+                issues.append(LintIssue("Índice negativo pode causar erro em runtime.", severity="warning"))
             list_inner = self._extract_collection_inner(base_type, "list")
             if list_inner is not None:
                 return list_inner
@@ -617,6 +608,22 @@ class Linter:
                 issues.append(LintIssue(
                     f"Comparação entre tipos incompatíveis: {lt} {expr.op} {rt}."
                 ))
+                return None
+
+            if expr.op == "+" and lt == "string" and rt == "string":
+                return "string"
+
+            if expr.op == "%":
+                if lt is not None and lt != "int":
+                    issues.append(LintIssue(
+                        f"Operação '%' com lado esquerdo {lt} (esperado int)."
+                    ))
+                if rt is not None and rt != "int":
+                    issues.append(LintIssue(
+                        f"Operação '%' com lado direito {rt} (esperado int)."
+                    ))
+                if lt == "int" and rt == "int":
+                    return "int"
                 return None
 
             if lt is not None and lt not in ("int", "float"):
@@ -841,18 +848,10 @@ class Linter:
         return value_type
 
     def _is_struct_collection(self, value_type: Optional[MintType], structs: Dict[str, Dict[str, MintType]]) -> bool:
-        inner = self._extract_collection_inner(value_type, "table")
-        if inner is None:
-            inner = self._extract_collection_inner(value_type, "list")
-        return inner is not None and inner in structs
+        return is_struct_collection(value_type, structs)
 
     def _extract_collection_inner(self, value_type: Optional[MintType], collection_name: str) -> Optional[MintType]:
-        if value_type is None:
-            return None
-        prefix = f"{collection_name}<"
-        if not value_type.startswith(prefix) or not value_type.endswith(">"):
-            return None
-        return value_type[len(prefix):-1].strip()
+        return extract_collection_inner(value_type, collection_name)
 
     def _is_chained_comparison(self, expr: Binary) -> bool:
         if expr.op not in ("==", "!=", "<", ">", "<=", ">="):

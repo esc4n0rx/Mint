@@ -100,15 +100,6 @@ class StructDecl:
     fields: List[StructField]
 
 
-@dataclass
-class ListType:
-    inner_type: MintType
-
-
-@dataclass
-class TableType:
-    inner_type: MintType
-
 # -------------------------
 # Statements
 # -------------------------

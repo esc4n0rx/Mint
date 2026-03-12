@@ -8,10 +8,8 @@ KEYWORDS = {
     "init": TokenType.INIT,
     "initialization": TokenType.INITIALIZATION,
     "endprogram": TokenType.ENDPROGRAM,
-
     "var": TokenType.VAR,
     "type": TokenType.TYPE,
-
     "int": TokenType.INT_T,
     "string": TokenType.STRING_T,
     "bool": TokenType.BOOL_T,
@@ -19,10 +17,8 @@ KEYWORDS = {
     "char": TokenType.CHAR_T,
     "list": TokenType.LIST,
     "table": TokenType.TABLE,
-
     "true": TokenType.TRUE,
     "false": TokenType.FALSE,
-
     "write": TokenType.WRITE,
     "add": TokenType.ADD,
     "insert": TokenType.INSERT,
@@ -77,53 +73,9 @@ KEYWORDS = {
     "struct": TokenType.STRUCT,
     "endstruct": TokenType.ENDSTRUCT,
     "import": TokenType.IMPORT,
-    "IMPORT": TokenType.IMPORT,
-    "FUNC": TokenType.FUNC,
-    "ENDFUNC": TokenType.ENDFUNC,
-    "RETURN": TokenType.RETURN,
-    "RETURNS": TokenType.RETURNS,
-    "STRUCT": TokenType.STRUCT,
-    "ENDSTRUCT": TokenType.ENDSTRUCT,
-    "QUERY": TokenType.QUERY,
-    "FROM": TokenType.FROM,
-    "WHERE": TokenType.WHERE,
-    "INTO": TokenType.INTO,
-    "DB": TokenType.DB,
-    "CREATE": TokenType.CREATE,
-    "OPEN": TokenType.OPEN,
-    "APPEND": TokenType.APPEND,
-    "VALUES": TokenType.VALUES,
-    "SELECT": TokenType.SELECT,
-    "UPDATE": TokenType.UPDATE,
-    "SET": TokenType.SET,
-    "DELETE": TokenType.DELETE,
-    "PRIMARY": TokenType.PRIMARY,
-    "KEY": TokenType.KEY,
-    "AUTO_INCREMENT": TokenType.AUTO_INCREMENT,
-    "SHOW": TokenType.SHOW,
-    "TABLES": TokenType.TABLES,
-    "DESCRIBE": TokenType.DESCRIBE,
-    "INDEX": TokenType.INDEX,
-    "ON": TokenType.ON,
-    "COMPACT": TokenType.COMPACT,
-    "TABLE": TokenType.TABLE,
-    "DB": TokenType.DB,
-    "LOAD": TokenType.LOAD,
-    "SAVE": TokenType.SAVE,
-    "EXPORT": TokenType.EXPORT,
-    "TO": TokenType.TO,
     "and": TokenType.AND,
     "or": TokenType.OR,
     "not": TokenType.NOT,
-    "AND": TokenType.AND,
-    "OR": TokenType.OR,
-    "NOT": TokenType.NOT,
-    "FOR": TokenType.FOR,
-    "IN": TokenType.IN,
-    "ENDFOR": TokenType.ENDFOR,
-    "TRY": TokenType.TRY,
-    "CATCH": TokenType.CATCH,
-    "ENDTRY": TokenType.ENDTRY,
 }
 
 class Lexer:
@@ -236,6 +188,7 @@ class Lexer:
                 "-": TokenType.MINUS,
                 "*": TokenType.STAR,
                 "/": TokenType.SLASH,
+                "%": TokenType.MOD,
                 "(": TokenType.LPAREN,
                 ")": TokenType.RPAREN,
                 "[": TokenType.LBRACKET,
@@ -284,6 +237,10 @@ class Lexer:
                     chars.append("\n")
                 elif esc == "t":
                     chars.append("\t")
+                elif esc == "r":
+                    chars.append("\r")
+                elif esc == "\\":
+                    chars.append("\\")
                 else:
                     chars.append(esc)
                 self._advance()
@@ -303,7 +260,10 @@ class Lexer:
             c = self._peek()
             if c == "'":
                 self._advance()
-                return Token(TokenType.CHAR, "".join(chars), start_line, start_col)
+                value = "".join(chars)
+                if len(value) != 1:
+                    raise LexerError(f"Char deve conter exatamente 1 caractere em {start_line}:{start_col}")
+                return Token(TokenType.CHAR, value, start_line, start_col)
             if c == "\\":
                 self._advance()
                 if self._is_at_end():
@@ -315,6 +275,8 @@ class Lexer:
                     chars.append("\n")
                 elif esc == "t":
                     chars.append("\t")
+                elif esc == "r":
+                    chars.append("\r")
                 elif esc == "\\":
                     chars.append("\\")
                 else:
@@ -346,7 +308,7 @@ class Lexer:
         while not self._is_at_end() and (self._peek().isalnum() or self._peek() == "_"):
             self._advance()
         text = self.source[start:self.i]
-        ttype = KEYWORDS.get(text, TokenType.IDENT)
+        ttype = KEYWORDS.get(text.lower(), TokenType.IDENT)
         return Token(ttype, text, start_line, start_col)
 
     def _advance(self) -> str:
