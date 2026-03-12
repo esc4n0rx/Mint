@@ -157,13 +157,13 @@ class Interpreter:
             return
         if isinstance(stmt, AppendValuesStmt):
             rec = {k: self._eval(v) for k, v in stmt.assignments}
-            self.db.append_record(stmt.table_name, rec)
+            self.db.append_record(stmt.table_name, rec, operation="APPEND")
             return
         if isinstance(stmt, AppendStructStmt):
             v = self._resolve_value(stmt.struct_var)
             if not isinstance(v, dict) or "fields" not in v:
                 raise RuntimeMintError("APPEND STRUCT exige variável struct válida.")
-            self.db.append_record(stmt.table_name, dict(v["fields"]))
+            self.db.append_record(stmt.table_name, dict(v["fields"]), operation="APPEND STRUCT")
             return
         if isinstance(stmt, SelectStmt):
             rows = self.db.select(stmt.table_name)

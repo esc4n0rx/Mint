@@ -207,3 +207,12 @@ Registro consolidado das funcionalidades implementadas.
 - Highlighter VS Code atualizado com novas keywords de banco.
 - Documentação técnica criada em `docs/mintdb_beta.md`.
 - Exemplos adicionados em `examples/mintdb/` cobrindo fluxo de criação, append, select, update, delete e validação de abertura.
+
+## 2026-03-12 — Correção de integridade MintDB Beta 1 (PRIMARY KEY + linter)
+- Enforcement de `PRIMARY KEY` em runtime para `APPEND`, `APPEND STRUCT` e `UPDATE` com bloqueio de colisões em registros ativos.
+- `DELETE` mantém política de tombstone e permite reutilizar chave de registros removidos logicamente.
+- `DB CREATE` agora falha quando o arquivo `.mintdb` já existe (comportamento seguro e previsível).
+- Linter ganhou severidade (`error`/`warning`/`info`) e regra de warning para fluxo persistido não idempotente (`DB OPEN` + seed fixa com PK literal).
+- IDE atualizada para respeitar severidade real do linter nos diagnósticos.
+- Documentação MintDB atualizada e novos exemplos em `examples/mintdb/` para casos válidos, erros de integridade e fluxo mais seguro.
+- Testes automatizados adicionados em `tests/test_mintdb_beta1_integrity.py` cobrindo constraints, reabertura e warnings estáticos.

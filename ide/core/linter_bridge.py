@@ -24,7 +24,7 @@ class LinterBridge:
             issues.extend(Linter().lint(program))
             for issue in issues:
                 line, col = self._extract_position(issue.message)
-                diagnostics.append(Diagnostic("warning", issue.message, str(p), line, col))
+                diagnostics.append(Diagnostic(issue.severity, issue.message, str(p), line, col))
         except MintError as exc:
             line, col = self._extract_position(str(exc))
             diagnostics.append(Diagnostic("error", str(exc), str(p), line, col))
