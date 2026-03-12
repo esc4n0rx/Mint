@@ -610,6 +610,9 @@ class Linter:
                 ))
                 return None
 
+            if expr.op in ("/", "%") and isinstance(expr.right, IntLit) and expr.right.value == 0:
+                issues.append(LintIssue("Divisão/módulo por zero detectado estaticamente."))
+
             if expr.op == "+" and lt == "string" and rt == "string":
                 return "string"
 

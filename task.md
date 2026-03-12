@@ -2,6 +2,15 @@
 
 Registro consolidado das funcionalidades implementadas.
 
+## 2026-03-12 — Ajustes adicionais de robustez (follow-up)
+- Linter passou a detectar divisão/módulo por zero com literal (`/ 0` e `% 0`) antes de runtime.
+- Runtime numérico endurecido para não tratar `bool` como `int` em operações aritméticas.
+- Testes automatizados adicionados para:
+  - guard de divisão por zero no linter;
+  - não vazamento de escopo de variável declarada dentro de `FOR`;
+  - rejeição léxica imediata de char inválido (`'AB'`);
+  - bloqueio de path traversal em `LOAD`.
+
 ## 2026-03-12 — Correções de robustez (runtime/linter/highlighter)
 - Core:
   - Divisão `/` no interpreter passa a retornar `float` também para `int/int`.

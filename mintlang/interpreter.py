@@ -605,6 +605,14 @@ class Interpreter:
             values[field_name] = self._default_value_for_type(field_type)
         return {"__struct__": mint_type, "fields": values}
 
+    @staticmethod
+    def _is_numeric_value(value: Any) -> bool:
+        return type(value) in (int, float)
+
+    @staticmethod
+    def _is_int_value(value: Any) -> bool:
+        return type(value) is int
+
     def _eval(self, expr: Expr) -> Any:
         if isinstance(expr, IntLit):
             return expr.value
@@ -683,25 +691,25 @@ class Interpreter:
             if expr.op == "+":
                 if isinstance(left, str) and isinstance(right, str):
                     return left + right
-                if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+                if self._is_numeric_value(left) and self._is_numeric_value(right):
                     return left + right
                 raise RuntimeMintError("Operação '+' requer números ou strings compatíveis.")
             if expr.op == "-":
-                if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+                if self._is_numeric_value(left) and self._is_numeric_value(right):
                     return left - right
                 raise RuntimeMintError("Operação '-' requer int ou float em ambos os lados.")
             if expr.op == "*":
-                if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+                if self._is_numeric_value(left) and self._is_numeric_value(right):
                     return left * right
                 raise RuntimeMintError("Operação '*' requer int ou float em ambos os lados.")
             if expr.op == "/":
                 if right == 0:
                     raise RuntimeMintError("Divisão por zero.")
-                if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+                if self._is_numeric_value(left) and self._is_numeric_value(right):
                     return float(left) / float(right)
                 raise RuntimeMintError("Operação '/' requer int ou float em ambos os lados.")
             if expr.op == "%":
-                if not isinstance(left, int) or not isinstance(right, int):
+                if not self._is_int_value(left) or not self._is_int_value(right):
                     raise RuntimeMintError("Operação '%' requer int em ambos os lados.")
                 if right == 0:
                     raise RuntimeMintError("Módulo por zero.")
