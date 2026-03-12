@@ -2,7 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 from .ast_nodes import (
-    Program, VarDeclStmt, WriteStmt, AddStmt, InsertStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, TryCatchStmt, ReturnStmt, CallStmt, FuncDecl, Stmt,
+    Program, VarDeclStmt, WriteStmt, AddStmt, InsertStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, TryCatchStmt, ReturnStmt, CallStmt,
+    DbCreateStmt, DbOpenStmt, TableCreateStmt, AppendValuesStmt, AppendStructStmt, SelectStmt, UpdateStmt, DeleteStmt, FuncDecl, Stmt,
     StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall, CountExpr, SumExpr, AvgExpr,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
@@ -246,6 +247,53 @@ class Linter:
             if not self._is_struct_collection(source_type, structs):
                 issues.append(LintIssue("EXPORT exige variável do tipo table<Struct> ou list<Struct>."))
             return
+        if isinstance(stmt, DbCreateStmt):
+            return
+
+        if isinstance(stmt, DbOpenStmt):
+            return
+
+        if isinstance(stmt, TableCreateStmt):
+            if not stmt.columns:
+                issues.append(LintIssue("TABLE CREATE exige ao menos uma coluna."))
+            names = set()
+            for c in stmt.columns:
+                if c.name in names:
+                    issues.append(LintIssue(f"Coluna duplicada em TABLE CREATE: {c.name}."))
+                names.add(c.name)
+                if c.col_type not in BUILTIN_TYPES:
+                    issues.append(LintIssue(f"Tipo de coluna inválido: {c.col_type}."))
+            return
+
+        if isinstance(stmt, AppendValuesStmt):
+            if not stmt.assignments:
+                issues.append(LintIssue("APPEND VALUES exige pelo menos um campo."))
+            for _, expr in stmt.assignments:
+                self._infer_type(expr, sym, funcs, structs, issues)
+            return
+
+        if isinstance(stmt, AppendStructStmt):
+            t = sym.get(stmt.struct_var)
+            if t is None or t not in structs:
+                issues.append(LintIssue("APPEND STRUCT exige variável de struct válida."))
+            return
+
+        if isinstance(stmt, SelectStmt):
+            dest_type = sym.get(stmt.destination)
+            if dest_type is None:
+                issues.append(LintIssue(f"Destino '{stmt.destination}' não declarado."))
+            elif not dest_type.startswith("list<") and not dest_type.startswith("table<"):
+                issues.append(LintIssue("INTO do SELECT deve ser list<Struct> ou table<Struct>."))
+            return
+
+        if isinstance(stmt, UpdateStmt):
+            for _, expr in stmt.assignments:
+                self._infer_type(expr, sym, funcs, structs, issues)
+            return
+
+        if isinstance(stmt, DeleteStmt):
+            return
+
         if isinstance(stmt, QueryStmt):
             source_type = sym.get(stmt.source)
             if source_type is None:

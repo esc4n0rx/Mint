@@ -37,6 +37,7 @@ Também há campos de configuração para caminhos de runtime/linter no diálogo
 
 - Workspace com explorer de arquivos e ações de criação/renomeação/exclusão.
 - Editor com abas múltiplas, line numbers, highlight de linha atual, auto-indent e sintaxe Mint.
+- Highlight atualizado para comandos MintDB beta (`DB CREATE/OPEN`, `TABLE CREATE`, `APPEND`, `SELECT`, `UPDATE`, `DELETE`).
 - Fluxos de abrir/salvar/salvar como/salvar todos.
 - Execução do arquivo atual com output assíncrono.
 - Lint do arquivo atual com painel de problemas e navegação por clique.
@@ -60,3 +61,9 @@ Também há campos de configuração para caminhos de runtime/linter no diálogo
 - Destaque visual de diagnósticos no editor (sublinhado ondulado + tooltip).
 - Painel de problemas ampliado com coluna de sugestão e navegação por linha/coluna.
 - Área educativa **Aprender Mint** com tópicos, explicações e botão para inserir exemplo no editor.
+
+
+## Novidades (2026-03-12)
+
+- IDE atualizada para suportar os comandos da feature MintDB beta no syntax highlight.
+- Guia **Aprender Mint** com seção MintDB e snippet pronto para testes de persistência local.

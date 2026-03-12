@@ -168,6 +168,63 @@ class QueryStmt(Stmt):
     condition: Expr
     destination: str
 
+
+@dataclass
+class DbCreateStmt(Stmt):
+    path: str
+
+
+@dataclass
+class DbOpenStmt(Stmt):
+    path: str
+
+
+@dataclass
+class ColumnDef:
+    name: str
+    col_type: MintType
+    primary_key: bool = False
+    auto_increment: bool = False
+
+
+@dataclass
+class TableCreateStmt(Stmt):
+    table_name: str
+    columns: List[ColumnDef]
+
+
+@dataclass
+class AppendValuesStmt(Stmt):
+    table_name: str
+    assignments: List[tuple[str, Expr]]
+
+
+@dataclass
+class AppendStructStmt(Stmt):
+    struct_var: str
+    table_name: str
+
+
+@dataclass
+class SelectStmt(Stmt):
+    table_name: str
+    columns: List[str]
+    condition: Optional[Expr]
+    destination: str
+
+
+@dataclass
+class UpdateStmt(Stmt):
+    table_name: str
+    assignments: List[tuple[str, Expr]]
+    condition: Expr
+
+
+@dataclass
+class DeleteStmt(Stmt):
+    table_name: str
+    condition: Expr
+
 @dataclass
 class LoadStmt(Stmt):
     path: str

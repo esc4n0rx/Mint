@@ -6,10 +6,12 @@ from typing import Dict, Any, Optional, List
 from pathlib import Path
 from .ast_nodes import (
     Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, TryCatchStmt, ReturnStmt, CallStmt,
+    DbCreateStmt, DbOpenStmt, TableCreateStmt, AppendValuesStmt, AppendStructStmt, SelectStmt, UpdateStmt, DeleteStmt,
     FuncDecl, StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall, CountExpr, SumExpr, AvgExpr,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
 from .errors import RuntimeMintError
+from .mintdb import MintDB
 
 DEFAULTS: Dict[MintType, Any] = {
     "int": 0,
@@ -38,6 +40,7 @@ class Interpreter:
         self.scopes: List[Scope] = [self.globals]
         self.funcs: Dict[str, FuncDecl] = {}
         self.structs: Dict[str, Dict[str, MintType]] = {}
+        self.db = MintDB()
 
     def run(self, program: Program) -> None:
         for struct in program.structs:
@@ -142,6 +145,80 @@ class Interpreter:
         if isinstance(stmt, MoveStmt):
             self._assign_value(stmt.target, self._eval(stmt.source))
             return
+        if isinstance(stmt, DbCreateStmt):
+            self.db.create(stmt.path)
+            return
+        if isinstance(stmt, DbOpenStmt):
+            self.db.open(stmt.path)
+            return
+        if isinstance(stmt, TableCreateStmt):
+            cols = [{"name": c.name, "type": c.col_type, "primary_key": c.primary_key, "auto_increment": c.auto_increment} for c in stmt.columns]
+            self.db.create_table(stmt.table_name, cols)
+            return
+        if isinstance(stmt, AppendValuesStmt):
+            rec = {k: self._eval(v) for k, v in stmt.assignments}
+            self.db.append_record(stmt.table_name, rec)
+            return
+        if isinstance(stmt, AppendStructStmt):
+            v = self._resolve_value(stmt.struct_var)
+            if not isinstance(v, dict) or "fields" not in v:
+                raise RuntimeMintError("APPEND STRUCT exige variável struct válida.")
+            self.db.append_record(stmt.table_name, dict(v["fields"]))
+            return
+        if isinstance(stmt, SelectStmt):
+            rows = self.db.select(stmt.table_name)
+            if stmt.condition is not None:
+                filtered = []
+                for r in rows:
+                    scope = Scope(types={k: self._infer_runtime_type(v) for k, v in r.items()}, env=dict(r))
+                    self._push_scope(scope)
+                    try:
+                        ok = self._eval(stmt.condition)
+                    finally:
+                        self._pop_scope()
+                    if not isinstance(ok, bool):
+                        raise RuntimeMintError("WHERE do SELECT deve resultar em bool.")
+                    if ok:
+                        filtered.append(r)
+                rows = filtered
+            if stmt.columns != ["*"]:
+                rows = [{c: row.get(c) for c in stmt.columns} for row in rows]
+            self._assign_value(stmt.destination, rows)
+            return
+        if isinstance(stmt, UpdateStmt):
+            def pred(r):
+                scope = Scope(types={k: self._infer_runtime_type(v) for k, v in r.items()}, env=dict(r))
+                self._push_scope(scope)
+                try:
+                    res = self._eval(stmt.condition)
+                finally:
+                    self._pop_scope()
+                if not isinstance(res, bool):
+                    raise RuntimeMintError("WHERE do UPDATE deve resultar em bool.")
+                return res
+            def upd(r):
+                scope = Scope(types={k: self._infer_runtime_type(v) for k, v in r.items()}, env=dict(r))
+                self._push_scope(scope)
+                try:
+                    for k, expr in stmt.assignments:
+                        r[k] = self._eval(expr)
+                finally:
+                    self._pop_scope()
+            self.db.update(stmt.table_name, upd, pred)
+            return
+        if isinstance(stmt, DeleteStmt):
+            def pred(r):
+                scope = Scope(types={k: self._infer_runtime_type(v) for k, v in r.items()}, env=dict(r))
+                self._push_scope(scope)
+                try:
+                    res = self._eval(stmt.condition)
+                finally:
+                    self._pop_scope()
+                if not isinstance(res, bool):
+                    raise RuntimeMintError("WHERE do DELETE deve resultar em bool.")
+                return res
+            self.db.delete(stmt.table_name, pred)
+            return
         if isinstance(stmt, QueryStmt):
             self._exec_query(stmt)
             return
@@ -167,6 +244,17 @@ class Interpreter:
             raise ReturnSignal(self._eval(stmt.expr))
 
         raise RuntimeMintError(f"Stmt não suportado: {type(stmt).__name__}")
+
+    def _infer_runtime_type(self, value: Any) -> MintType:
+        if isinstance(value, bool):
+            return "bool"
+        if isinstance(value, int):
+            return "int"
+        if isinstance(value, float):
+            return "float"
+        if isinstance(value, str):
+            return "string"
+        return "string"
 
     def _exec_query(self, stmt: QueryStmt) -> None:
         source_type = self._resolve_type(stmt.source)
