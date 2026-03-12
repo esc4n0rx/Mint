@@ -1,0 +1,3 @@
+id;name;age;active
+1;Paulo;25;true
+3;Maria;42;true
