@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from .ast_nodes import (
     Program, VarDeclStmt, WriteStmt, AddStmt, InsertStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, TryCatchStmt, ReturnStmt, CallStmt,
     DbCreateStmt, DbOpenStmt, TableCreateStmt, AppendValuesStmt, AppendStructStmt, SelectStmt, UpdateStmt, DeleteStmt, FuncDecl, Stmt,
@@ -28,6 +28,7 @@ SYSTEM_MEMBERS: Dict[str, MintType] = {
 @dataclass
 class LintIssue:
     message: str
+    severity: str = "error"
 
 
 @dataclass
@@ -88,6 +89,7 @@ class Linter:
         for func in program.funcs:
             self._lint_function(func, global_sym, funcs, structs, issues)
 
+        self._lint_mintdb_persistence(program.body, issues)
         return issues
 
     def _collect_structs(self, struct_decls: List[StructDecl], issues: List[LintIssue]) -> Dict[str, Dict[str, MintType]]:
@@ -692,6 +694,74 @@ class Linter:
                 issues.append(LintIssue(f"Função '{call.name}' não retorna valor e não pode ser usada em expressão."))
             return None
         return sig.return_type
+
+    def _lint_mintdb_persistence(self, body: List[Stmt], issues: List[LintIssue]) -> None:
+        persistent_paths = set()
+        table_primary_keys: Dict[str, List[str]] = {}
+        fixed_seed_events: List[Tuple[str, Tuple[Any, ...], str]] = []
+
+        for stmt in body:
+            if isinstance(stmt, DbOpenStmt):
+                persistent_paths.add(self._normalize_db_path(stmt.path))
+            elif isinstance(stmt, TableCreateStmt):
+                primary_keys = [c.name for c in stmt.columns if c.primary_key]
+                if primary_keys:
+                    table_primary_keys[stmt.table_name] = primary_keys
+            elif isinstance(stmt, AppendValuesStmt):
+                pks = table_primary_keys.get(stmt.table_name)
+                if not pks:
+                    continue
+                assignments = {name: expr for name, expr in stmt.assignments}
+                literal_key: List[Any] = []
+                is_fixed = True
+                for pk in pks:
+                    lit = self._literal_value(assignments.get(pk))
+                    if lit is None:
+                        is_fixed = False
+                        break
+                    literal_key.append(lit)
+                if is_fixed:
+                    fixed_seed_events.append((stmt.table_name, tuple(literal_key), "APPEND"))
+            elif isinstance(stmt, AppendStructStmt):
+                pks = table_primary_keys.get(stmt.table_name)
+                if pks:
+                    fixed_seed_events.append((stmt.table_name, tuple(["<struct>"] * len(pks)), "APPEND STRUCT"))
+
+        if not persistent_paths:
+            return
+
+        if fixed_seed_events:
+            first_table, first_key, first_op = fixed_seed_events[0]
+            issues.append(LintIssue(
+                (
+                    "Fluxo MintDB potencialmente não idempotente: script abre banco persistente e insere seed fixa "
+                    f"na tabela '{first_table}' via {first_op} com chave primária {first_key}. "
+                    "Reexecução pode falhar por violação de chave primária em runtime."
+                ),
+                severity="warning",
+            ))
+            issues.append(LintIssue(
+                "Recomendação MintDB: proteja criação/seed (ex.: validar existência antes de APPEND ou usar fluxo idempotente dedicado).",
+                severity="info",
+            ))
+
+    def _normalize_db_path(self, path: str) -> str:
+        return path.strip().lower()
+
+    def _literal_value(self, expr: Optional[Expr]) -> Optional[Any]:
+        if expr is None:
+            return None
+        if isinstance(expr, IntLit):
+            return expr.value
+        if isinstance(expr, FloatLit):
+            return expr.value
+        if isinstance(expr, StringLit):
+            return expr.value
+        if isinstance(expr, CharLit):
+            return expr.value
+        if isinstance(expr, BoolLit):
+            return expr.value
+        return None
 
     def _is_system_access(self, expr: FieldAccessExpr) -> bool:
         return isinstance(expr.base, VarRef) and expr.base.name == RESERVED_NAMESPACE

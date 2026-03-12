@@ -47,6 +47,8 @@ class MintDB:
         p = Path(path)
         if p.suffix.lower() != ".mintdb":
             raise RuntimeMintError("DB CREATE exige arquivo com extensão .mintdb.")
+        if p.exists():
+            raise RuntimeMintError(f"DB CREATE falhou: arquivo já existe ({path}).")
         p.parent.mkdir(parents=True, exist_ok=True)
         now = int(time.time())
         empty_catalog = self._serialize_catalog([], [])
@@ -105,12 +107,14 @@ class MintDB:
         self.catalog[table_name] = meta
         self.schemas[table_name] = schema
 
-    def append_record(self, table_name: str, record: Dict[str, Any]) -> None:
+    def append_record(self, table_name: str, record: Dict[str, Any], *, enforce_primary_key: bool = True, operation: str = "APPEND") -> None:
         self._ensure_open()
         meta = self._table_meta(table_name)
+        if enforce_primary_key and not record.get("__deleted__", False):
+            self._validate_primary_key_on_append(table_name, record, operation)
         rec_bytes = json.dumps(record, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         payload = struct.pack("<I", 1) + struct.pack("<I", len(rec_bytes)) + rec_bytes
-        block_offset = self._append_block(meta.table_id, BLOCK_ACTIVE, payload, 1, 0)
+        block_offset = self._append_block(meta.table_id, BLOCK_ACTIVE, payload, 1, 0, previous_offset=meta.last_data_block_offset)
         if meta.first_data_block_offset == 0:
             meta.first_data_block_offset = block_offset
         meta.last_data_block_offset = block_offset
@@ -131,19 +135,40 @@ class MintDB:
                 raise RuntimeMintError("Falha de integridade: bloco de dados corrompido.")
             rows.extend(self._decode_payload_rows(payload))
             current = bh["next_offset"]
-        return [r for r in rows if not r.get("__deleted__", False)]
+
+        primary_keys = self._primary_key_columns(table_name)
+        if not primary_keys:
+            return [r for r in rows if not r.get("__deleted__", False)]
+
+        active_by_key: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
+        for row in rows:
+            key = self._primary_key_tuple(row, primary_keys)
+            if row.get("__deleted__", False):
+                active_by_key.pop(key, None)
+            else:
+                active_by_key[key] = row
+        return list(active_by_key.values())
 
     def update(self, table_name: str, updater, predicate) -> int:
         rows = self.select(table_name)
         changed = 0
+        updates: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
         for r in rows:
             if predicate(r):
                 nr = dict(r)
                 updater(nr)
                 nr["__versioned_from__"] = r
-                self.append_record(table_name, nr)
-                self.append_record(table_name, {**r, "__deleted__": True})
+                updates.append((r, nr))
                 changed += 1
+
+        if not updates:
+            return 0
+
+        self._validate_primary_key_on_update(table_name, rows, updates)
+
+        for original, updated in updates:
+            self.append_record(table_name, updated, enforce_primary_key=False, operation="UPDATE")
+            self.append_record(table_name, {**original, "__deleted__": True}, enforce_primary_key=False, operation="UPDATE")
         return changed
 
     def delete(self, table_name: str, predicate) -> int:
@@ -151,13 +176,70 @@ class MintDB:
         removed = 0
         for r in rows:
             if predicate(r):
-                self.append_record(table_name, {**r, "__deleted__": True})
+                self.append_record(table_name, {**r, "__deleted__": True}, enforce_primary_key=False, operation="DELETE")
                 removed += 1
         if removed:
             meta = self._table_meta(table_name)
             meta.removed_records += removed
             self._persist_table_meta(meta)
         return removed
+
+    def _primary_key_columns(self, table_name: str) -> List[str]:
+        schema = self.schemas.get(table_name)
+        if schema is None:
+            return []
+        return [c["name"] for c in schema.get("columns", []) if c.get("primary_key")]
+
+    @staticmethod
+    def _primary_key_tuple(record: Dict[str, Any], primary_keys: List[str]) -> Tuple[Any, ...]:
+        return tuple(record.get(pk) for pk in primary_keys)
+
+    def _validate_primary_key_on_append(self, table_name: str, record: Dict[str, Any], operation: str) -> None:
+        primary_keys = self._primary_key_columns(table_name)
+        if not primary_keys:
+            return
+        key = self._primary_key_tuple(record, primary_keys)
+        for pk in primary_keys:
+            if pk not in record:
+                raise RuntimeMintError(
+                    f"Violação de chave primária em {operation} na tabela '{table_name}': campo '{pk}' ausente."
+                )
+            if record.get(pk) is None:
+                raise RuntimeMintError(
+                    f"Violação de chave primária em {operation} na tabela '{table_name}': campo '{pk}' não pode ser nulo."
+                )
+        for row in self.select(table_name):
+            if self._primary_key_tuple(row, primary_keys) == key:
+                raise RuntimeMintError(
+                    f"Violação de chave primária em {operation} na tabela '{table_name}': registro com chave {key} já existe."
+                )
+
+    def _validate_primary_key_on_update(
+        self,
+        table_name: str,
+        rows: List[Dict[str, Any]],
+        updates: List[Tuple[Dict[str, Any], Dict[str, Any]]],
+    ) -> None:
+        primary_keys = self._primary_key_columns(table_name)
+        if not primary_keys:
+            return
+
+        updated_by_id = {id(original): updated for original, updated in updates}
+        key_owner: Dict[Tuple[Any, ...], int] = {}
+        for row in rows:
+            candidate = updated_by_id.get(id(row), row)
+            for pk in primary_keys:
+                if candidate.get(pk) is None:
+                    raise RuntimeMintError(
+                        f"Violação de chave primária em UPDATE na tabela '{table_name}': campo '{pk}' não pode ser nulo."
+                    )
+            key = self._primary_key_tuple(candidate, primary_keys)
+            owner = key_owner.get(key)
+            if owner is not None and owner != id(row):
+                raise RuntimeMintError(
+                    f"Violação de chave primária em UPDATE na tabela '{table_name}': chave {key} já existe em outro registro ativo."
+                )
+            key_owner[key] = id(row)
 
     def _decode_payload_rows(self, payload: bytes) -> List[Dict[str, Any]]:
         i = 0
@@ -172,7 +254,7 @@ class MintDB:
             rows.append(json.loads(raw.decode("utf-8")))
         return rows
 
-    def _append_block(self, table_id: int, status: int, payload: bytes, record_count: int, next_offset: int) -> int:
+    def _append_block(self, table_id: int, status: int, payload: bytes, record_count: int, next_offset: int, previous_offset: int = 0) -> int:
         self._ensure_open()
         assert self.path is not None
         with self.path.open("r+b") as f:
@@ -192,6 +274,26 @@ class MintDB:
             )
             f.write(header)
             f.write(payload)
+
+            if previous_offset:
+                f.seek(previous_offset)
+                previous_raw = f.read(BLOCK_HEADER_SIZE)
+                if len(previous_raw) != BLOCK_HEADER_SIZE:
+                    raise RuntimeMintError("Falha de integridade: header de bloco anterior inválido.")
+                ver, tid, psz, rcount, _prev_next, prev_status, prev_flags, prev_checksum = struct.unpack(BLOCK_HEADER_FMT, previous_raw)
+                patched = struct.pack(
+                    BLOCK_HEADER_FMT,
+                    ver,
+                    tid,
+                    psz,
+                    rcount,
+                    offset,
+                    prev_status,
+                    prev_flags,
+                    prev_checksum,
+                )
+                f.seek(previous_offset)
+                f.write(patched)
         return offset
 
     def _read_block_header(self, offset: int) -> Dict[str, Any]:

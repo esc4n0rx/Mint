@@ -8,18 +8,34 @@ program init.
   var cliente type Client.
   var adultos type list<Client>.
 initialization.
-  DB CREATE "examples/mintdb/demo.mintdb".
+  TRY.
+    DB CREATE "examples/mintdb/demo.mintdb".
+  CATCH.
+    write("Banco já existe; reutilizando arquivo.").
+  ENDTRY.
   DB OPEN "examples/mintdb/demo.mintdb".
 
-  TABLE CREATE clients (id int PRIMARY KEY, name string, age int).
+  TRY.
+    TABLE CREATE clients (id int PRIMARY KEY, name string, age int).
+  CATCH.
+    write("Tabela clients já existe.").
+  ENDTRY.
 
-  APPEND INTO clients VALUES (id = 1, name = "Paulo", age = 27).
-  APPEND INTO clients VALUES (id = 2, name = "Ana", age = 17).
+  TRY.
+    APPEND INTO clients VALUES (id = 1, name = "Paulo", age = 27).
+    APPEND INTO clients VALUES (id = 2, name = "Ana", age = 17).
+  CATCH.
+    write("Seeds fixos já aplicados.").
+  ENDTRY.
 
   cliente.id = 3.
   cliente.name = "Lia".
   cliente.age = 21.
-  APPEND STRUCT cliente INTO clients.
+  TRY.
+    APPEND STRUCT cliente INTO clients.
+  CATCH.
+    write("Registro da struct já existe.").
+  ENDTRY.
 
   SELECT * FROM clients WHERE age > 18 INTO adultos.
   write(count(adultos)).
