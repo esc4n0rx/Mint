@@ -256,3 +256,11 @@ Registro consolidado das funcionalidades implementadas.
 - Validação estrutural aprofundada de blocos, offsets, encadeamento e consistência de índices.
 - Documentação Beta 2 em `docs/mintdb_beta2.md` e exemplos em `examples/mintdb_beta2/`.
 - Testes automatizados Beta 2 em `tests/test_mintdb_beta2.py`.
+
+## 2026-03-17 — Auditoria técnica Beta 3 (estabilização e documentação oficial)
+- Corrigida a execução padrão de testes com `pytest.ini` (`pythonpath = .`), eliminando falha de coleta por import do pacote `mintlang`.
+- Substituídos placeholders em `examples/mintdb_beta2/02..11` por exemplos funcionais cobrindo fluxo real da Beta 2.
+- Criados documentos oficiais:
+  - `docs/beta3_audit_report.md` (achados, riscos, correções e recomendações);
+  - `docs/mint_feature_status.md` (matriz real de suporte por comando);
+  - `docs/mint_language_reference.md` (referência oficial da linguagem para desenvolvedores).

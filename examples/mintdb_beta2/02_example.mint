@@ -1,5 +1,22 @@
+STRUCT Client.
+  id type int.
+  email type string.
+  name type string.
+ENDSTRUCT.
+
 program init.
-  var rows type table<Client>.
 initialization.
-  write("MintDB Beta 2 example placeholder.").
+  TRY.
+    DB CREATE "examples/mintdb_beta2/02_example.mintdb".
+  CATCH.
+    write("DB já existe, seguindo.").
+  ENDTRY.
+
+  DB OPEN "examples/mintdb_beta2/02_example.mintdb".
+
+  TRY.
+    TABLE CREATE clients (id int PRIMARY KEY, email string, name string).
+  CATCH.
+    write("Tabela clients já existe.").
+  ENDTRY.
 endprogram.

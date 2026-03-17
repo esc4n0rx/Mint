@@ -1,5 +1,5 @@
 program init.
-  var rows type table<Client>.
 initialization.
-  write("MintDB Beta 2 example placeholder.").
+  DB OPEN "examples/mintdb_beta2/02_example.mintdb".
+  UPDATE clients SET name = "Beatriz" WHERE email == "bia@mint.dev".
 endprogram.
