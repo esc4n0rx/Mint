@@ -47,6 +47,8 @@ class MintDB:
         self._lock_fd: Optional[int] = None
         self._lock_path: Optional[Path] = None
         self.indexes: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        self._tx_active = False
+        self._tx_backup: Optional[Path] = None
 
     # lifecycle -----------------------------------------------------------------
     def create(self, path: str) -> None:
@@ -109,6 +111,38 @@ class MintDB:
             except OSError:
                 pass
         self._lock_path = None
+
+    def begin_transaction(self) -> None:
+        self._ensure_open()
+        if self._tx_active:
+            raise RuntimeMintError("Já existe transação ativa.")
+        assert self.path is not None
+        backup = Path(str(self.path) + ".txbak")
+        if backup.exists():
+            backup.unlink()
+        with self.path.open("rb") as src, backup.open("wb") as dst:
+            dst.write(src.read())
+        self._tx_active = True
+        self._tx_backup = backup
+
+    def commit_transaction(self) -> None:
+        if not self._tx_active:
+            raise RuntimeMintError("DB COMMIT sem transação ativa.")
+        if self._tx_backup and self._tx_backup.exists():
+            self._tx_backup.unlink()
+        self._tx_active = False
+        self._tx_backup = None
+
+    def rollback_transaction(self) -> None:
+        if not self._tx_active:
+            raise RuntimeMintError("DB ROLLBACK sem transação ativa.")
+        assert self.path is not None
+        assert self._tx_backup is not None
+        self.close()
+        os.replace(self._tx_backup, self.path)
+        self.open(str(self.path))
+        self._tx_active = False
+        self._tx_backup = None
 
     # schema/inspection ----------------------------------------------------------
     def create_table(self, table_name: str, columns: List[Dict[str, Any]]) -> None:
@@ -295,6 +329,94 @@ class MintDB:
 
         self._run_write_op("DELETE", _op)
         return len(to_remove)
+
+    def upsert_record(self, table_name: str, record: Dict[str, Any]) -> None:
+        primary_keys = self._primary_key_columns(table_name)
+        if not primary_keys:
+            raise RuntimeMintError("UPSERT exige PRIMARY KEY.")
+        for pk in primary_keys:
+            if pk not in record:
+                raise RuntimeMintError(f"UPSERT exige chave primária '{pk}'.")
+        rows = self.select(table_name)
+        match = None
+        target_key = tuple(record.get(pk) for pk in primary_keys)
+        for row in rows:
+            if tuple(row.get(pk) for pk in primary_keys) == target_key:
+                match = row
+                break
+        if match is None:
+            self.append_record(table_name, record, operation="UPSERT_INSERT")
+            return
+        updated = dict(match)
+        updated.update(record)
+        def _op() -> None:
+            self._append_record_no_tx(table_name, updated)
+            self._append_record_no_tx(table_name, {**match, "__deleted__": True})
+            self._rebuild_indexes_for_table(table_name)
+            self._refresh_header_checksum()
+        self._run_write_op("UPSERT_UPDATE", _op)
+
+    def select_join(self, table_name: str, table_alias: Optional[str], joins: List[Any]) -> List[Dict[str, Any]]:
+        base_alias = table_alias or table_name
+        base_rows = self.select(table_name)
+        result = [{f"{base_alias}.{k}": v for k, v in row.items()} for row in base_rows]
+        for join in joins:
+            join_rows = self.select(join.table_name)
+            joined: List[Dict[str, Any]] = []
+            for left_row in result:
+                for jr in join_rows:
+                    right_prefixed = {f"{join.alias}.{k}": v for k, v in jr.items()}
+                    merged = {**left_row, **right_prefixed}
+                    if merged.get(join.left_ref) == merged.get(join.right_ref):
+                        joined.append(merged)
+            result = joined
+        return result
+
+    def alter_table_add_column(self, table_name: str, column: Dict[str, Any]) -> None:
+        self._table_meta(table_name)
+        schema = self.schemas[table_name]
+        if any(c["name"] == column["name"] for c in schema.get("columns", [])):
+            raise RuntimeMintError(f"Coluna '{column['name']}' já existe.")
+        schema["columns"].append(column)
+        self._write_catalog(list(self.catalog.values()), list(self.schemas.values()), self.indexes)
+
+    def alter_table_drop_column(self, table_name: str, column_name: str) -> None:
+        self._table_meta(table_name)
+        schema = self.schemas[table_name]
+        pks = [c["name"] for c in schema.get("columns", []) if c.get("primary_key")]
+        if column_name in pks:
+            raise RuntimeMintError("Não é permitido remover PRIMARY KEY.")
+        if not any(c["name"] == column_name for c in schema.get("columns", [])):
+            raise RuntimeMintError(f"Coluna '{column_name}' não existe.")
+        schema["columns"] = [c for c in schema["columns"] if c["name"] != column_name]
+        self._write_catalog(list(self.catalog.values()), list(self.schemas.values()), self.indexes)
+
+    def alter_table_rename_column(self, table_name: str, old_name: str, new_name: str) -> None:
+        self._table_meta(table_name)
+        schema = self.schemas[table_name]
+        if any(c["name"] == new_name for c in schema.get("columns", [])):
+            raise RuntimeMintError(f"Coluna '{new_name}' já existe.")
+        target = None
+        for c in schema["columns"]:
+            if c["name"] == old_name:
+                target = c
+                break
+        if target is None:
+            raise RuntimeMintError(f"Coluna '{old_name}' não existe.")
+        target["name"] = new_name
+        self._write_catalog(list(self.catalog.values()), list(self.schemas.values()), self.indexes)
+
+    def alter_table_rename(self, table_name: str, new_name: str) -> None:
+        meta = self._table_meta(table_name)
+        if new_name in self.catalog:
+            raise RuntimeMintError(f"Tabela '{new_name}' já existe.")
+        schema = self.schemas.pop(table_name)
+        schema["name"] = new_name
+        self.schemas[new_name] = schema
+        self.catalog.pop(table_name)
+        self.catalog[new_name] = TableMeta(meta.table_id, new_name, meta.schema_offset, meta.first_data_block_offset, meta.last_data_block_offset, meta.active_records, meta.removed_records, meta.version, meta.flags)
+        self.indexes[new_name] = self.indexes.pop(table_name, {})
+        self._write_catalog(list(self.catalog.values()), list(self.schemas.values()), self.indexes)
 
     def compact(self) -> None:
         self._ensure_open()

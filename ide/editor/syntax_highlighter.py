@@ -36,7 +36,7 @@ class MintSyntaxHighlighter(QSyntaxHighlighter):
             "load", "save", "export", "struct", "endstruct", "add", "insert", "size",
             "for", "in", "endfor", "try", "catch", "endtry", "import", "and", "or", "not",
             "count", "sum", "avg", "true", "false",
-            "db", "create", "open", "compact", "append", "values", "select", "update", "set", "delete",
+            "db", "create", "open", "begin", "commit", "rollback", "compact", "append", "upsert", "values", "select", "join", "update", "set", "delete", "alter", "drop", "column", "rename",
             "show", "tables", "describe", "index", "on", "primary", "key", "auto_increment",
         ]
         for word in keywords:
@@ -44,7 +44,7 @@ class MintSyntaxHighlighter(QSyntaxHighlighter):
             pattern.setCaseSensitivity(Qt.CaseInsensitive)
             self.rules.append((pattern, keyword_fmt))
 
-        for t in ["int", "float", "string", "char", "bool", "list", "table"]:
+        for t in ["int", "float", "string", "char", "bool", "decimal", "date", "datetime", "time", "text", "long", "double", "bytes", "uuid", "json", "list", "table"]:
             self.rules.append((QRegExp(fr"\b{t}\b"), type_fmt))
 
         self.rules.extend([

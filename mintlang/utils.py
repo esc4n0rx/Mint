@@ -43,11 +43,21 @@ def convert_string_to_type(raw: str, field_type: MintType, field_name: str) -> A
             return int(raw)
         except ValueError:
             raise ValueError(f"valor '{raw}' para campo {field_name} type int")
-    if field_type == "float":
+    if field_type in ("float", "double"):
         try:
             return float(raw)
         except ValueError:
-            raise ValueError(f"valor '{raw}' para campo {field_name} type float")
+            raise ValueError(f"valor '{raw}' para campo {field_name} type {field_type}")
+    if field_type in ("long",):
+        try:
+            return int(raw)
+        except ValueError:
+            raise ValueError(f"valor '{raw}' para campo {field_name} type long")
+    if field_type in ("text", "date", "time", "datetime", "uuid"):
+        return raw
+    if field_type == "json":
+        import json
+        return json.loads(raw)
     if field_type == "bool":
         if raw == "true":
             return True

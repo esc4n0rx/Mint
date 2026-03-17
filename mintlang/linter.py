@@ -2,14 +2,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 from .ast_nodes import (
-    Program, VarDeclStmt, WriteStmt, AddStmt, InsertStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, TryCatchStmt, ReturnStmt, CallStmt,
-    DbCreateStmt, DbOpenStmt, DbCompactStmt, ShowTablesStmt, DescribeStmt, IndexCreateStmt, SelectCountStmt, TableCreateStmt, AppendValuesStmt, AppendStructStmt, SelectStmt, UpdateStmt, DeleteStmt, FuncDecl, Stmt,
+    Program, VarDeclStmt, WriteStmt, AddStmt, InsertStmt, IfStmt, SwitchStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, BreakStmt, ContinueStmt, TryCatchStmt, ReturnStmt, CallStmt,
+    DbCreateStmt, DbOpenStmt, DbCompactStmt, DbBeginStmt, DbCommitStmt, DbRollbackStmt, ShowTablesStmt, DescribeStmt, IndexCreateStmt, SelectCountStmt, TableCreateStmt, AppendValuesStmt, AppendStructStmt, UpsertStmt, SelectStmt, UpdateStmt, DeleteStmt, AlterTableAddColumnStmt, AlterTableDropColumnStmt, AlterTableRenameColumnStmt, AlterTableRenameStmt, FuncDecl, Stmt,
     StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall, CountExpr, SumExpr, AvgExpr,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
 from .utils import extract_collection_inner, is_struct_collection, SYSTEM_MEMBERS
 
-BUILTIN_TYPES = {"int", "float", "string", "char", "bool"}
+BUILTIN_TYPES = {"int", "float", "string", "char", "bool", "decimal", "date", "datetime", "time", "text", "long", "double", "bytes", "uuid", "json"}
 RESERVED_NAMESPACE = "system"
 
 @dataclass
@@ -71,7 +71,7 @@ class Linter:
                     ))
 
         for st in program.body:
-            self._lint_stmt(st, global_sym, funcs, structs, issues, current_return=None)
+            self._lint_stmt(st, global_sym, funcs, structs, issues, current_return=None, loop_depth=0)
 
         for func in program.funcs:
             self._lint_function(func, global_sym, funcs, structs, issues)
@@ -123,7 +123,7 @@ class Linter:
         for st in func.body:
             if isinstance(st, ReturnStmt):
                 has_return_stmt = True
-            self._lint_stmt(st, local_sym, funcs, structs, issues, current_return=func.return_type)
+            self._lint_stmt(st, local_sym, funcs, structs, issues, current_return=func.return_type, loop_depth=0)
 
         if func.return_type is not None and not has_return_stmt:
             issues.append(LintIssue(f"Função '{func.name}' declara retorno {func.return_type}, mas não possui RETURN."))
@@ -136,6 +136,7 @@ class Linter:
         structs: Dict[str, Dict[str, MintType]],
         issues: List[LintIssue],
         current_return: Optional[MintType],
+        loop_depth: int = 0,
     ) -> None:
         if isinstance(stmt, VarDeclStmt):
             if stmt.name == RESERVED_NAMESPACE:
@@ -317,6 +318,9 @@ class Linter:
         if isinstance(stmt, DeleteStmt):
             return
 
+        if isinstance(stmt, (DbBeginStmt, DbCommitStmt, DbRollbackStmt, AlterTableAddColumnStmt, AlterTableDropColumnStmt, AlterTableRenameColumnStmt, AlterTableRenameStmt, UpsertStmt)):
+            return
+
         if isinstance(stmt, QueryStmt):
             source_type = sym.get(stmt.source)
             if source_type is None:
@@ -357,11 +361,11 @@ class Linter:
                     issues.append(LintIssue("Condição do if deve ser bool."))
                 branch_sym = dict(sym)
                 for inner in branch.body:
-                    self._lint_stmt(inner, branch_sym, funcs, structs, issues, current_return)
+                    self._lint_stmt(inner, branch_sym, funcs, structs, issues, current_return, loop_depth)
             if stmt.else_body is not None:
                 else_sym = dict(sym)
                 for inner in stmt.else_body:
-                    self._lint_stmt(inner, else_sym, funcs, structs, issues, current_return)
+                    self._lint_stmt(inner, else_sym, funcs, structs, issues, current_return, loop_depth)
             return
 
         if isinstance(stmt, AssignStmt):
@@ -384,7 +388,7 @@ class Linter:
                 issues.append(LintIssue("Condição do while deve ser bool."))
             loop_sym = dict(sym)
             for inner in stmt.body:
-                self._lint_stmt(inner, loop_sym, funcs, structs, issues, current_return)
+                self._lint_stmt(inner, loop_sym, funcs, structs, issues, current_return, loop_depth + 1)
             return
 
         if isinstance(stmt, ForStmt):
@@ -402,16 +406,47 @@ class Linter:
             for_sym = dict(sym)
             for_sym[stmt.item_name] = item_type
             for inner in stmt.body:
-                self._lint_stmt(inner, for_sym, funcs, structs, issues, current_return)
+                self._lint_stmt(inner, for_sym, funcs, structs, issues, current_return, loop_depth + 1)
+            return
+
+        if isinstance(stmt, SwitchStmt):
+            switch_type = self._infer_type(stmt.expression, sym, funcs, structs, issues)
+            seen_literals = set()
+            for case in stmt.cases:
+                case_type = self._infer_type(case.value, sym, funcs, structs, issues)
+                if switch_type is not None and case_type is not None and not self._is_assignment_compatible(switch_type, case_type):
+                    issues.append(LintIssue("CASE incompatível com tipo da expressão do SWITCH."))
+                literal_value = self._extract_literal_value(case.value)
+                if literal_value is not None:
+                    if literal_value in seen_literals:
+                        issues.append(LintIssue("CASE literal duplicado no SWITCH."))
+                    seen_literals.add(literal_value)
+                local = dict(sym)
+                for inner in case.body:
+                    self._lint_stmt(inner, local, funcs, structs, issues, current_return, loop_depth)
+            if stmt.default_body is not None:
+                local = dict(sym)
+                for inner in stmt.default_body:
+                    self._lint_stmt(inner, local, funcs, structs, issues, current_return, loop_depth)
+            return
+
+        if isinstance(stmt, BreakStmt):
+            if loop_depth <= 0:
+                issues.append(LintIssue("BREAK só pode ser usado dentro de FOR/WHILE."))
+            return
+
+        if isinstance(stmt, ContinueStmt):
+            if loop_depth <= 0:
+                issues.append(LintIssue("CONTINUE só pode ser usado dentro de FOR/WHILE."))
             return
 
         if isinstance(stmt, TryCatchStmt):
             try_sym = dict(sym)
             for inner in stmt.try_body:
-                self._lint_stmt(inner, try_sym, funcs, structs, issues, current_return)
+                self._lint_stmt(inner, try_sym, funcs, structs, issues, current_return, loop_depth)
             catch_sym = dict(sym)
             for inner in stmt.catch_body:
-                self._lint_stmt(inner, catch_sym, funcs, structs, issues, current_return)
+                self._lint_stmt(inner, catch_sym, funcs, structs, issues, current_return, loop_depth)
             return
 
         if isinstance(stmt, ReturnStmt):
@@ -427,6 +462,11 @@ class Linter:
             return
 
         issues.append(LintIssue(f"Statement não suportado no linter: {type(stmt).__name__}"))
+
+    def _extract_literal_value(self, expr: Expr):
+        if isinstance(expr, (IntLit, FloatLit, StringLit, CharLit, BoolLit)):
+            return expr.value
+        return None
 
     def _infer_input_target_type(
         self,
