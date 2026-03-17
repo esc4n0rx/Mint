@@ -1,5 +1,7 @@
 program init.
-  var rows type table<Client>.
+  var total type int.
 initialization.
-  write("MintDB Beta 2 example placeholder.").
+  DB OPEN "examples/mintdb_beta2/02_example.mintdb".
+  SELECT COUNT(*) FROM clients INTO total.
+  write(total).
 endprogram.
