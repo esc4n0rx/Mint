@@ -3,8 +3,8 @@ from typing import List, Optional
 from .tokens import Token, TokenType
 from .errors import ParserError
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, IfBranch, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, TryCatchStmt, ReturnStmt, CallStmt,
-    DbCreateStmt, DbOpenStmt, DbCompactStmt, ShowTablesStmt, DescribeStmt, IndexCreateStmt, SelectCountStmt, ColumnDef, TableCreateStmt, AppendValuesStmt, AppendStructStmt, SelectStmt, UpdateStmt, DeleteStmt,
+    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, IfBranch, SwitchStmt, SwitchCase, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, BreakStmt, ContinueStmt, TryCatchStmt, ReturnStmt, CallStmt,
+    DbCreateStmt, DbOpenStmt, DbCompactStmt, DbBeginStmt, DbCommitStmt, DbRollbackStmt, ShowTablesStmt, DescribeStmt, IndexCreateStmt, SelectCountStmt, ColumnDef, TableCreateStmt, AppendValuesStmt, AppendStructStmt, UpsertStmt, SelectStmt, JoinClause, UpdateStmt, DeleteStmt, AlterTableAddColumnStmt, AlterTableDropColumnStmt, AlterTableRenameColumnStmt, AlterTableRenameStmt,
     FuncDecl, FuncParam, StructDecl, StructField, ImportDecl,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, FieldAccessExpr, IndexAccessExpr, SizeCall, CountExpr, SumExpr, AvgExpr, Binary, Unary, CallExpr, MintType
 )
@@ -176,6 +176,26 @@ class Parser:
             return "float"
         if self._match(TokenType.CHAR_T):
             return "char"
+        if self._match(TokenType.DECIMAL_T):
+            return "decimal"
+        if self._match(TokenType.DATE_T):
+            return "date"
+        if self._match(TokenType.DATETIME_T):
+            return "datetime"
+        if self._match(TokenType.TIME_T):
+            return "time"
+        if self._match(TokenType.TEXT_T):
+            return "text"
+        if self._match(TokenType.LONG_T):
+            return "long"
+        if self._match(TokenType.DOUBLE_T):
+            return "double"
+        if self._match(TokenType.BYTES_T):
+            return "bytes"
+        if self._match(TokenType.UUID_T):
+            return "uuid"
+        if self._match(TokenType.JSON_T):
+            return "json"
         t = self._peek()
         raise ParserError(f"Tipo inválido '{t.lexeme}' em {t.line}:{t.col}")
 
@@ -262,10 +282,19 @@ class Parser:
                 path = self._consume(TokenType.STRING, "DB OPEN exige caminho string.").lexeme
                 self._consume(TokenType.DOT, "Faltou '.' no fim do DB OPEN.")
                 return DbOpenStmt(path=path)
+            if self._match(TokenType.BEGIN):
+                self._consume(TokenType.DOT, "Faltou '.' no fim do DB BEGIN.")
+                return DbBeginStmt()
+            if self._match(TokenType.COMMIT):
+                self._consume(TokenType.DOT, "Faltou '.' no fim do DB COMMIT.")
+                return DbCommitStmt()
+            if self._match(TokenType.ROLLBACK):
+                self._consume(TokenType.DOT, "Faltou '.' no fim do DB ROLLBACK.")
+                return DbRollbackStmt()
             if self._match(TokenType.COMPACT):
                 self._consume(TokenType.DOT, "Faltou '.' no fim do DB COMPACT.")
                 return DbCompactStmt()
-            raise ParserError("Comando DB inválido. Use DB CREATE, DB OPEN ou DB COMPACT.")
+            raise ParserError("Comando DB inválido. Use DB CREATE, DB OPEN, DB BEGIN, DB COMMIT, DB ROLLBACK ou DB COMPACT.")
 
         if self._match(TokenType.TABLE):
             self._consume(TokenType.CREATE, "Esperado CREATE após TABLE.")
@@ -288,6 +317,33 @@ class Parser:
             self._consume(TokenType.RPAREN, "Esperado ')' em TABLE CREATE.")
             self._consume(TokenType.DOT, "Faltou '.' no fim do TABLE CREATE.")
             return TableCreateStmt(table_name=table_name, columns=cols)
+
+        if self._match(TokenType.ALTER):
+            self._consume(TokenType.TABLE, "Esperado TABLE após ALTER.")
+            table_name = self._consume(TokenType.IDENT, "Esperado tabela no ALTER TABLE.").lexeme
+            if self._match(TokenType.ADD):
+                self._consume(TokenType.COLUMN, "Esperado COLUMN em ALTER TABLE ADD.")
+                col_name = self._consume(TokenType.IDENT, "Esperado nome da coluna.").lexeme
+                col_type = self._parse_primitive_type()
+                self._consume(TokenType.DOT, "Faltou '.' no fim do ALTER TABLE ADD COLUMN.")
+                return AlterTableAddColumnStmt(table_name=table_name, column=ColumnDef(name=col_name, col_type=col_type))
+            if self._match(TokenType.DROP):
+                self._consume(TokenType.COLUMN, "Esperado COLUMN em ALTER TABLE DROP.")
+                col_name = self._consume(TokenType.IDENT, "Esperado nome da coluna.").lexeme
+                self._consume(TokenType.DOT, "Faltou '.' no fim do ALTER TABLE DROP COLUMN.")
+                return AlterTableDropColumnStmt(table_name=table_name, column_name=col_name)
+            if self._match(TokenType.RENAME):
+                if self._match(TokenType.COLUMN):
+                    old = self._consume(TokenType.IDENT, "Esperado coluna antiga.").lexeme
+                    self._consume(TokenType.TO, "Esperado TO em RENAME COLUMN.")
+                    new = self._consume(TokenType.IDENT, "Esperado nova coluna.").lexeme
+                    self._consume(TokenType.DOT, "Faltou '.' no fim do ALTER TABLE RENAME COLUMN.")
+                    return AlterTableRenameColumnStmt(table_name=table_name, old_name=old, new_name=new)
+                self._consume(TokenType.TO, "Esperado TO em ALTER TABLE RENAME.")
+                new = self._consume(TokenType.IDENT, "Esperado novo nome da tabela.").lexeme
+                self._consume(TokenType.DOT, "Faltou '.' no fim do ALTER TABLE RENAME TO.")
+                return AlterTableRenameStmt(table_name=table_name, new_name=new)
+            raise ParserError("ALTER TABLE inválido.")
 
         if self._match(TokenType.APPEND):
             if self._match(TokenType.STRUCT):
@@ -312,6 +368,23 @@ class Parser:
             self._consume(TokenType.DOT, "Faltou '.' no fim do APPEND.")
             return AppendValuesStmt(table_name=table_name, assignments=assigns)
 
+        if self._match(TokenType.UPSERT):
+            self._consume(TokenType.INTO, "Esperado INTO no UPSERT.")
+            table_name = self._consume(TokenType.IDENT, "Esperado nome da tabela no UPSERT.").lexeme
+            self._consume(TokenType.VALUES, "Esperado VALUES no UPSERT.")
+            self._consume(TokenType.LPAREN, "Esperado '(' após VALUES.")
+            assigns: List[tuple[str, Expr]] = []
+            while not self._check(TokenType.RPAREN):
+                n = self._consume(TokenType.IDENT, "Esperado coluna em UPSERT VALUES.").lexeme
+                self._consume(TokenType.EQUAL, "Esperado '=' em UPSERT VALUES.")
+                e = self._expression()
+                assigns.append((n, e))
+                if not self._match(TokenType.COMMA):
+                    break
+            self._consume(TokenType.RPAREN, "Esperado ')' no UPSERT VALUES.")
+            self._consume(TokenType.DOT, "Faltou '.' no fim do UPSERT.")
+            return UpsertStmt(table_name=table_name, assignments=assigns)
+
         if self._match(TokenType.SELECT):
             if self._match(TokenType.COUNT):
                 self._consume(TokenType.LPAREN, "Esperado '(' em COUNT.")
@@ -330,18 +403,32 @@ class Parser:
             if self._match(TokenType.STAR):
                 columns = ["*"]
             else:
-                columns.append(self._consume(TokenType.IDENT, "Esperado coluna no SELECT.").lexeme)
+                columns.append(self._qualified_name())
                 while self._match(TokenType.COMMA):
-                    columns.append(self._consume(TokenType.IDENT, "Esperado coluna no SELECT.").lexeme)
+                    columns.append(self._qualified_name())
             self._consume(TokenType.FROM, "Esperado FROM no SELECT.")
             table_name = self._consume(TokenType.IDENT, "Esperado tabela no SELECT.").lexeme
+            table_alias = None
+            if self._check(TokenType.IDENT):
+                table_alias = self._advance().lexeme
+            joins: List[JoinClause] = []
+            while self._match(TokenType.JOIN):
+                join_table = self._consume(TokenType.IDENT, "Esperado tabela no JOIN.").lexeme
+                join_alias = join_table
+                if self._check(TokenType.IDENT):
+                    join_alias = self._advance().lexeme
+                self._consume(TokenType.ON, "Esperado ON no JOIN.")
+                left_ref = self._qualified_name()
+                self._consume(TokenType.EQEQ, "JOIN exige comparação '=='.")
+                right_ref = self._qualified_name()
+                joins.append(JoinClause(table_name=join_table, alias=join_alias, left_ref=left_ref, right_ref=right_ref))
             cond = None
             if self._match(TokenType.WHERE):
                 cond = self._expression()
             self._consume(TokenType.INTO, "Esperado INTO no SELECT.")
             dest = self._consume(TokenType.IDENT, "Esperado destino no SELECT.").lexeme
             self._consume(TokenType.DOT, "Faltou '.' no fim do SELECT.")
-            return SelectStmt(table_name=table_name, columns=columns, condition=cond, destination=dest)
+            return SelectStmt(table_name=table_name, columns=columns, condition=cond, destination=dest, table_alias=table_alias, joins=joins)
 
         if self._match(TokenType.UPDATE):
             table_name = self._consume(TokenType.IDENT, "Esperado tabela no UPDATE.").lexeme
@@ -406,6 +493,17 @@ class Parser:
         if self._match(TokenType.TRY):
             return self._try_catch_stmt()
 
+        if self._match(TokenType.SWITCH):
+            return self._switch_stmt()
+
+        if self._match(TokenType.BREAK):
+            self._consume(TokenType.DOT, "Faltou '.' no fim do BREAK.")
+            return BreakStmt()
+
+        if self._match(TokenType.CONTINUE):
+            self._consume(TokenType.DOT, "Faltou '.' no fim do CONTINUE.")
+            return ContinueStmt()
+
         if self._match(TokenType.RETURN):
             expr = self._expression()
             self._consume(TokenType.DOT, "Faltou '.' no fim do return.")
@@ -421,6 +519,13 @@ class Parser:
 
         t = self._peek()
         raise ParserError(f"Comando inesperado '{t.lexeme}' em {t.line}:{t.col}")
+
+    def _qualified_name(self) -> str:
+        name = self._consume(TokenType.IDENT, "Esperado identificador.").lexeme
+        if self._match(TokenType.DOT):
+            right = self._consume(TokenType.IDENT, "Esperado identificador após '.'.").lexeme
+            return f"{name}.{right}"
+        return name
 
     def _if_stmt(self) -> IfStmt:
         condition = self._expression()
@@ -459,6 +564,23 @@ class Parser:
         self._consume(TokenType.ENDFOR, "Esperado 'ENDFOR'.")
         self._consume(TokenType.DOT, "Faltou '.' após ENDFOR.")
         return ForStmt(item_name=item_name, collection=collection, body=body)
+
+    def _switch_stmt(self) -> SwitchStmt:
+        expression = self._expression()
+        self._consume(TokenType.DOT, "Faltou '.' após expressão do SWITCH.")
+        cases: List[SwitchCase] = []
+        default_body = None
+        while self._match(TokenType.CASE):
+            case_expr = self._expression()
+            self._consume(TokenType.DOT, "Faltou '.' após CASE.")
+            body = self._block_until({TokenType.CASE, TokenType.DEFAULT, TokenType.ENDSWITCH})
+            cases.append(SwitchCase(value=case_expr, body=body))
+        if self._match(TokenType.DEFAULT):
+            self._consume(TokenType.DOT, "Faltou '.' após DEFAULT.")
+            default_body = self._block_until({TokenType.ENDSWITCH})
+        self._consume(TokenType.ENDSWITCH, "Esperado ENDSWITCH.")
+        self._consume(TokenType.DOT, "Faltou '.' após ENDSWITCH.")
+        return SwitchStmt(expression=expression, cases=cases, default_body=default_body)
 
     def _try_catch_stmt(self) -> TryCatchStmt:
         self._consume(TokenType.DOT, "Faltou '.' após TRY.")

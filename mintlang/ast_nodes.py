@@ -140,6 +140,19 @@ class IfStmt(Stmt):
     else_body: Optional[List[Stmt]] = None
 
 @dataclass
+class SwitchCase:
+    value: Expr
+    body: List[Stmt]
+
+
+@dataclass
+class SwitchStmt(Stmt):
+    expression: Expr
+    cases: List[SwitchCase]
+    default_body: Optional[List[Stmt]] = None
+
+
+@dataclass
 class AssignStmt(Stmt):
     target: Expr
     expr: Expr
@@ -176,6 +189,21 @@ class DbCompactStmt(Stmt):
 
 
 @dataclass
+class DbBeginStmt(Stmt):
+    pass
+
+
+@dataclass
+class DbCommitStmt(Stmt):
+    pass
+
+
+@dataclass
+class DbRollbackStmt(Stmt):
+    pass
+
+
+@dataclass
 class ColumnDef:
     name: str
     col_type: MintType
@@ -190,15 +218,11 @@ class TableCreateStmt(Stmt):
 
 
 @dataclass
-class AppendValuesStmt(Stmt):
+class JoinClause:
     table_name: str
-    assignments: List[tuple[str, Expr]]
-
-
-@dataclass
-class AppendStructStmt(Stmt):
-    struct_var: str
-    table_name: str
+    alias: str
+    left_ref: str
+    right_ref: str
 
 
 @dataclass
@@ -207,6 +231,26 @@ class SelectStmt(Stmt):
     columns: List[str]
     condition: Optional[Expr]
     destination: str
+    table_alias: Optional[str] = None
+    joins: Optional[List[JoinClause]] = None
+
+
+@dataclass
+class AppendValuesStmt(Stmt):
+    table_name: str
+    assignments: List[tuple[str, Expr]]
+
+
+@dataclass
+class UpsertStmt(Stmt):
+    table_name: str
+    assignments: List[tuple[str, Expr]]
+
+
+@dataclass
+class AppendStructStmt(Stmt):
+    struct_var: str
+    table_name: str
 
 
 @dataclass
@@ -241,6 +285,31 @@ class IndexCreateStmt(Stmt):
 
 
 @dataclass
+class AlterTableAddColumnStmt(Stmt):
+    table_name: str
+    column: ColumnDef
+
+
+@dataclass
+class AlterTableDropColumnStmt(Stmt):
+    table_name: str
+    column_name: str
+
+
+@dataclass
+class AlterTableRenameColumnStmt(Stmt):
+    table_name: str
+    old_name: str
+    new_name: str
+
+
+@dataclass
+class AlterTableRenameStmt(Stmt):
+    table_name: str
+    new_name: str
+
+
+@dataclass
 class SelectCountStmt(Stmt):
     table_name: str
     condition: Optional[Expr]
@@ -272,6 +341,16 @@ class ForStmt(Stmt):
     item_name: str
     collection: Expr
     body: List[Stmt]
+
+
+@dataclass
+class BreakStmt(Stmt):
+    pass
+
+
+@dataclass
+class ContinueStmt(Stmt):
+    pass
 
 
 @dataclass

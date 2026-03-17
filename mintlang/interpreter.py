@@ -1,12 +1,15 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, date, time
+from decimal import Decimal
+import uuid
+import json
 import csv
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 from .ast_nodes import (
-    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, TryCatchStmt, ReturnStmt, CallStmt,
-    DbCreateStmt, DbOpenStmt, DbCompactStmt, ShowTablesStmt, DescribeStmt, IndexCreateStmt, SelectCountStmt, TableCreateStmt, AppendValuesStmt, AppendStructStmt, SelectStmt, UpdateStmt, DeleteStmt,
+    Program, Stmt, WriteStmt, AddStmt, InsertStmt, VarDeclStmt, IfStmt, SwitchStmt, AssignStmt, InputStmt, MoveStmt, QueryStmt, LoadStmt, SaveStmt, ExportStmt, WhileStmt, ForStmt, BreakStmt, ContinueStmt, TryCatchStmt, ReturnStmt, CallStmt,
+    DbCreateStmt, DbOpenStmt, DbCompactStmt, DbBeginStmt, DbCommitStmt, DbRollbackStmt, ShowTablesStmt, DescribeStmt, IndexCreateStmt, SelectCountStmt, TableCreateStmt, AppendValuesStmt, AppendStructStmt, UpsertStmt, SelectStmt, JoinClause, UpdateStmt, DeleteStmt, AlterTableAddColumnStmt, AlterTableDropColumnStmt, AlterTableRenameColumnStmt, AlterTableRenameStmt,
     FuncDecl, StructDecl, FieldAccessExpr, IndexAccessExpr, SizeCall, CountExpr, SumExpr, AvgExpr,
     Expr, IntLit, FloatLit, StringLit, CharLit, BoolLit, VarRef, Binary, Unary, CallExpr, MintType
 )
@@ -16,10 +19,20 @@ from .utils import extract_collection_inner, convert_string_to_type, serialize_v
 
 DEFAULTS: Dict[MintType, Any] = {
     "int": 0,
+    "long": 0,
     "string": "",
+    "text": "",
     "bool": False,
     "float": 0.0,
+    "double": 0.0,
+    "decimal": Decimal("0"),
     "char": "\0",
+    "date": "1970-01-01",
+    "time": "00:00:00",
+    "datetime": "1970-01-01T00:00:00",
+    "bytes": b"",
+    "uuid": "00000000-0000-0000-0000-000000000000",
+    "json": {},
 }
 
 SYSTEM_NAMESPACE = "system"
@@ -27,6 +40,14 @@ SYSTEM_NAMESPACE = "system"
 class ReturnSignal(Exception):
     def __init__(self, value: Any):
         self.value = value
+
+
+class BreakSignal(Exception):
+    pass
+
+
+class ContinueSignal(Exception):
+    pass
 
 
 @dataclass
@@ -55,7 +76,12 @@ class Interpreter:
                 self._exec_decl(decl)
 
             for stmt in program.body:
-                self._exec_stmt(stmt)
+                try:
+                    self._exec_stmt(stmt)
+                except BreakSignal:
+                    raise RuntimeMintError("BREAK só pode ser usado dentro de FOR/WHILE.")
+                except ContinueSignal:
+                    raise RuntimeMintError("CONTINUE só pode ser usado dentro de FOR/WHILE.")
         finally:
             self.db.close()
 
@@ -158,6 +184,15 @@ class Interpreter:
         if isinstance(stmt, DbCompactStmt):
             self.db.compact()
             return
+        if isinstance(stmt, DbBeginStmt):
+            self.db.begin_transaction()
+            return
+        if isinstance(stmt, DbCommitStmt):
+            self.db.commit_transaction()
+            return
+        if isinstance(stmt, DbRollbackStmt):
+            self.db.rollback_transaction()
+            return
         if isinstance(stmt, TableCreateStmt):
             cols = [{"name": c.name, "type": c.col_type, "primary_key": c.primary_key, "auto_increment": c.auto_increment} for c in stmt.columns]
             self.db.create_table(stmt.table_name, cols)
@@ -174,6 +209,10 @@ class Interpreter:
             if not isinstance(v, dict) or "fields" not in v:
                 raise RuntimeMintError("APPEND STRUCT exige variável struct válida.")
             self.db.append_record(stmt.table_name, dict(v["fields"]), operation="APPEND STRUCT")
+            return
+        if isinstance(stmt, UpsertStmt):
+            rec = {k: self._eval(v) for k, v in stmt.assignments}
+            self.db.upsert_record(stmt.table_name, rec)
             return
         if isinstance(stmt, ShowTablesStmt):
             rows = self.db.show_tables()
@@ -220,7 +259,10 @@ class Interpreter:
             self._assign_value(stmt.destination, count)
             return
         if isinstance(stmt, SelectStmt):
-            rows = self.db.select(stmt.table_name)
+            if stmt.joins:
+                rows = self.db.select_join(stmt.table_name, stmt.table_alias, stmt.joins)
+            else:
+                rows = self.db.select(stmt.table_name)
             if stmt.condition is not None:
                 filtered = []
                 for r in rows:
@@ -285,12 +327,31 @@ class Interpreter:
         if isinstance(stmt, ExportStmt):
             self._exec_save(stmt.source, stmt.path)
             return
+        if isinstance(stmt, AlterTableAddColumnStmt):
+            self.db.alter_table_add_column(stmt.table_name, {"name": stmt.column.name, "type": stmt.column.col_type, "primary_key": stmt.column.primary_key, "auto_increment": stmt.column.auto_increment})
+            return
+        if isinstance(stmt, AlterTableDropColumnStmt):
+            self.db.alter_table_drop_column(stmt.table_name, stmt.column_name)
+            return
+        if isinstance(stmt, AlterTableRenameColumnStmt):
+            self.db.alter_table_rename_column(stmt.table_name, stmt.old_name, stmt.new_name)
+            return
+        if isinstance(stmt, AlterTableRenameStmt):
+            self.db.alter_table_rename(stmt.table_name, stmt.new_name)
+            return
+        if isinstance(stmt, SwitchStmt):
+            self._exec_switch(stmt)
+            return
         if isinstance(stmt, WhileStmt):
             self._exec_while(stmt)
             return
         if isinstance(stmt, ForStmt):
             self._exec_for(stmt)
             return
+        if isinstance(stmt, BreakStmt):
+            raise BreakSignal()
+        if isinstance(stmt, ContinueStmt):
+            raise ContinueSignal()
         if isinstance(stmt, TryCatchStmt):
             self._exec_try_catch(stmt)
             return
@@ -304,8 +365,14 @@ class Interpreter:
             return "bool"
         if isinstance(value, int):
             return "int"
+        if isinstance(value, Decimal):
+            return "decimal"
         if isinstance(value, float):
             return "float"
+        if isinstance(value, bytes):
+            return "bytes"
+        if isinstance(value, dict):
+            return "json"
         if isinstance(value, str):
             return "string"
         return "string"
@@ -517,6 +584,17 @@ class Interpreter:
             for inner in stmt.else_body:
                 self._exec_stmt(inner)
 
+    def _exec_switch(self, stmt: SwitchStmt) -> None:
+        pivot = self._eval(stmt.expression)
+        for case in stmt.cases:
+            if self._eval(case.value) == pivot:
+                for inner in case.body:
+                    self._exec_stmt(inner)
+                return
+        if stmt.default_body is not None:
+            for inner in stmt.default_body:
+                self._exec_stmt(inner)
+
     def _exec_while(self, stmt: WhileStmt) -> None:
         while True:
             cond = self._eval(stmt.condition)
@@ -524,8 +602,13 @@ class Interpreter:
                 raise RuntimeMintError("Condição do while deve ser bool.")
             if not cond:
                 return
-            for inner in stmt.body:
-                self._exec_stmt(inner)
+            try:
+                for inner in stmt.body:
+                    self._exec_stmt(inner)
+            except ContinueSignal:
+                continue
+            except BreakSignal:
+                return
 
     def _exec_for(self, stmt: ForStmt) -> None:
         collection_val = self._eval(stmt.collection)
@@ -548,6 +631,10 @@ class Interpreter:
             try:
                 for inner in stmt.body:
                     self._exec_stmt(inner)
+            except ContinueSignal:
+                pass
+            except BreakSignal:
+                return
             finally:
                 self._pop_scope()
 
@@ -579,7 +666,12 @@ class Interpreter:
         self._push_scope(local_scope)
         try:
             for st in func.body:
-                self._exec_stmt(st)
+                try:
+                    self._exec_stmt(st)
+                except BreakSignal:
+                    raise RuntimeMintError("BREAK só pode ser usado dentro de FOR/WHILE.")
+                except ContinueSignal:
+                    raise RuntimeMintError("CONTINUE só pode ser usado dentro de FOR/WHILE.")
             if func.return_type is not None:
                 raise RuntimeMintError(f"Função '{func.name}' deveria retornar {func.return_type}, mas terminou sem RETURN.")
             return None
@@ -866,6 +958,57 @@ class Interpreter:
                 raise RuntimeMintError(f"'{name}' é char, mas recebeu {type(val).__name__}.")
             if len(val) != 1:
                 raise RuntimeMintError(f"'{name}' é char, mas recebeu string com {len(val)} caracteres.")
+        if t == "long" and not isinstance(val, int):
+            raise RuntimeMintError(f"'{name}' é long, mas recebeu {type(val).__name__}.")
+        if t == "double":
+            if isinstance(val, int):
+                return float(val)
+            if not isinstance(val, float):
+                raise RuntimeMintError(f"'{name}' é double, mas recebeu {type(val).__name__}.")
+        if t == "decimal":
+            if isinstance(val, Decimal):
+                return val
+            if isinstance(val, (int, str)):
+                try:
+                    return Decimal(str(val))
+                except Exception as exc:
+                    raise RuntimeMintError(f"'{name}' inválido para decimal: {exc}.")
+            raise RuntimeMintError(f"'{name}' é decimal, mas recebeu {type(val).__name__}.")
+        if t in ("date", "time", "datetime"):
+            if not isinstance(val, str):
+                raise RuntimeMintError(f"'{name}' é {t}, mas recebeu {type(val).__name__}.")
+            try:
+                if t == "date":
+                    date.fromisoformat(val)
+                elif t == "time":
+                    time.fromisoformat(val)
+                else:
+                    datetime.fromisoformat(val)
+            except Exception:
+                raise RuntimeMintError(f"'{name}' deve estar no formato ISO para tipo {t}.")
+        if t == "text" and not isinstance(val, str):
+            raise RuntimeMintError(f"'{name}' é text, mas recebeu {type(val).__name__}.")
+        if t == "bytes" and not isinstance(val, (bytes, str)):
+            raise RuntimeMintError(f"'{name}' é bytes, mas recebeu {type(val).__name__}.")
+        if t == "bytes" and isinstance(val, str):
+            return val.encode("utf-8")
+        if t == "uuid":
+            if val in (None, "", "00000000-0000-0000-0000-000000000000"):
+                return str(uuid.uuid4())
+            if not isinstance(val, str):
+                raise RuntimeMintError(f"'{name}' é uuid, mas recebeu {type(val).__name__}.")
+            try:
+                return str(uuid.UUID(val))
+            except Exception:
+                raise RuntimeMintError(f"'{name}' não é uuid válido.")
+        if t == "json":
+            if isinstance(val, str):
+                try:
+                    return json.loads(val)
+                except Exception as exc:
+                    raise RuntimeMintError(f"'{name}' json inválido: {exc}.")
+            if not isinstance(val, (dict, list, int, float, bool)) and val is not None:
+                raise RuntimeMintError(f"'{name}' é json, mas recebeu {type(val).__name__}.")
         if t in self.structs:
             if not isinstance(val, dict) or val.get("__struct__") != t:
                 raise RuntimeMintError(f"'{name}' é {t}, mas recebeu valor incompatível.")

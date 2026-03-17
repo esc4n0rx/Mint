@@ -77,7 +77,7 @@
       "patterns": [
         {
           "name": "keyword.control.mint",
-          "match": "(?i)\\b(program|init|initialization|endprogram|if|elseif|else|endif|while|endwhile|for|in|endfor|try|catch|endtry|func|endfunc|return|returns|input|move|to|load|save|export|query|from|where|into|LOAD|SAVE|EXPORT|TO|QUERY|FROM|WHERE|INTO|FOR|IN|ENDFOR|TRY|CATCH|ENDTRY|struct|endstruct|STRUCT|ENDSTRUCT|add|insert|size|count|sum|avg|db|create|open|append|values|select|update|set|delete|primary|key|auto_increment|show|tables|describe|index|on|compact|DB|CREATE|OPEN|APPEND|VALUES|SELECT|UPDATE|SET|DELETE|PRIMARY|KEY|AUTO_INCREMENT|SHOW|TABLES|DESCRIBE|INDEX|ON|COMPACT|import|IMPORT)\\b"
+          "match": "(?i)\\b(program|init|initialization|endprogram|if|elseif|else|endif|while|endwhile|for|in|endfor|try|catch|endtry|func|endfunc|return|returns|input|move|to|load|save|export|query|from|where|into|LOAD|SAVE|EXPORT|TO|QUERY|FROM|WHERE|INTO|FOR|IN|ENDFOR|TRY|CATCH|ENDTRY|struct|endstruct|STRUCT|ENDSTRUCT|add|insert|size|count|sum|avg|db|create|open|append|values|select|update|set|delete|primary|key|auto_increment|show|tables|describe|index|on|compact|DB|CREATE|OPEN|APPEND|VALUES|SELECT|UPDATE|SET|DELETE|PRIMARY|KEY|AUTO_INCREMENT|SHOW|TABLES|DESCRIBE|INDEX|ON|COMPACT|import|IMPORT|switch|case|default|endswitch|break|continue|join|begin|commit|rollback|alter|drop|column|rename|upsert|SWITCH|CASE|DEFAULT|ENDSWITCH|BREAK|CONTINUE|JOIN|BEGIN|COMMIT|ROLLBACK|ALTER|DROP|COLUMN|RENAME|UPSERT\\b)"
         },
         {
           "name": "keyword.operator.logical.mint",
@@ -101,7 +101,7 @@
       "patterns": [
         {
           "name": "storage.type.mint",
-          "match": "(?i)\\b(int|string|bool|float|char|list|table)\\b"
+          "match": "(?i)\\b(int|string|bool|float|char|list|table|decimal|date|datetime|time|text|long|double|bytes|uuid|json|DECIMAL|DATE|DATETIME|TIME|TEXT|LONG|DOUBLE|BYTES|UUID|JSON\\b)"
         }
       ]
     },
