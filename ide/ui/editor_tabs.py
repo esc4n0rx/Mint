@@ -19,7 +19,6 @@ class EditorTabs(QTabWidget):
         self.setDocumentMode(True)
         self._tab_size = tab_size
         self._use_spaces = use_spaces
-        self.tabCloseRequested.connect(self.removeTab)
 
     def open_file(self, file_path: str, content: str) -> None:
         existing = self.index_of_path(file_path)

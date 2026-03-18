@@ -264,3 +264,12 @@ Registro consolidado das funcionalidades implementadas.
   - `docs/beta3_audit_report.md` (achados, riscos, correções e recomendações);
   - `docs/mint_feature_status.md` (matriz real de suporte por comando);
   - `docs/mint_language_reference.md` (referência oficial da linguagem para desenvolvedores).
+
+## 2026-03-18 — Redesign do app `/ide` para Mint ERP Studio
+- Aplicação PyQt5 redesenhada de IDE genérica para workbench ERP visual.
+- Nova navegação principal em árvore com áreas de Projeto, Sistema e Ajuda.
+- Sistema de tabelas com catálogo, modelador visual, grid de campos, persistência JSON e geração de definição `.mint`.
+- Sistema de módulos com árvore dedicada em `modules/`, criação de pastas e arquivos `.mint`.
+- Editor Mint existente reaproveitado com syntax highlight mantido e visual ajustado ao tema corporativo claro.
+- Centro de execução com histórico local, output estruturado e logs persistidos em `.mint_workbench`.
+- Documentação adicionada em `ide/README.md` e `ide/docs/workbench_architecture.md`.
