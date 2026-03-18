@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -24,14 +23,20 @@ class MintRunner(QObject):
         return self._process.state() != QProcess.NotRunning
 
     def run_file(self, file_path: str, cwd: str) -> None:
+        self._start(sys.executable, ['-m', 'mintlang.cli', '-file', str(Path(file_path))], cwd, file_path)
+
+    def run_python_script(self, script_path: str, cwd: str) -> None:
+        self._start(sys.executable, [str(Path(script_path))], cwd, script_path)
+
+    def _start(self, program: str, args: list[str], cwd: str, label: str) -> None:
         if self.is_running():
             self.stop()
-        self.started.emit(file_path)
+        self.started.emit(label)
         env = self._process.processEnvironment()
-        env.insert("PYTHONIOENCODING", "utf-8")
+        env.insert('PYTHONIOENCODING', 'utf-8')
         self._process.setProcessEnvironment(env)
-        self._process.setProgram(sys.executable)
-        self._process.setArguments(["-m", "mintlang.cli", "-file", str(Path(file_path))])
+        self._process.setProgram(program)
+        self._process.setArguments(args)
         self._process.setWorkingDirectory(cwd)
         self._process.start()
 
@@ -40,12 +45,12 @@ class MintRunner(QObject):
             self._process.kill()
 
     def _on_stdout(self) -> None:
-        data = bytes(self._process.readAllStandardOutput()).decode("utf-8", errors="replace")
+        data = bytes(self._process.readAllStandardOutput()).decode('utf-8', errors='replace')
         if data:
             self.output.emit(data)
 
     def _on_stderr(self) -> None:
-        data = bytes(self._process.readAllStandardError()).decode("utf-8", errors="replace")
+        data = bytes(self._process.readAllStandardError()).decode('utf-8', errors='replace')
         if data:
             self.error.emit(data)
 

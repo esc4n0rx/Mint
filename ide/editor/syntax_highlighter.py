@@ -10,24 +10,24 @@ class MintSyntaxHighlighter(QSyntaxHighlighter):
         self.rules = []
 
         keyword_fmt = QTextCharFormat()
-        keyword_fmt.setForeground(QColor("#56b6c2"))
+        keyword_fmt.setForeground(QColor("#005a9c"))
         keyword_fmt.setFontWeight(QFont.Bold)
 
         type_fmt = QTextCharFormat()
-        type_fmt.setForeground(QColor("#e5c07b"))
+        type_fmt.setForeground(QColor("#9a6700"))
 
         string_fmt = QTextCharFormat()
-        string_fmt.setForeground(QColor("#98c379"))
+        string_fmt.setForeground(QColor("#137333"))
 
         number_fmt = QTextCharFormat()
-        number_fmt.setForeground(QColor("#d19a66"))
+        number_fmt.setForeground(QColor("#b25e09"))
 
         comment_fmt = QTextCharFormat()
-        comment_fmt.setForeground(QColor("#7f848e"))
+        comment_fmt.setForeground(QColor("#6b7280"))
         comment_fmt.setFontItalic(True)
 
         system_fmt = QTextCharFormat()
-        system_fmt.setForeground(QColor("#c678dd"))
+        system_fmt.setForeground(QColor("#7b3fb5"))
 
         keywords = [
             "program", "init", "initialization", "endprogram", "var", "type", "write",

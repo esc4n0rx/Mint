@@ -1,0 +1,71 @@
+QMainWindow, QWidget {
+  background: #f4f7fb;
+  color: #223142;
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: 13px;
+}
+QMenuBar, QMenu, QToolBar {
+  background: #e9eef5;
+  color: #223142;
+  border: 1px solid #cfd8e6;
+}
+QStatusBar {
+  background: #dfe8f2;
+  border-top: 1px solid #c5d0df;
+}
+QLabel#WorkbenchTitle {
+  font-size: 22px;
+  font-weight: 600;
+  color: #173b69;
+}
+QLabel#WorkbenchSubtitle, QLabel#PanelTitle {
+  color: #5a6b7d;
+  font-size: 12px;
+  font-weight: 600;
+}
+QTabWidget::pane, QGroupBox, QTreeView, QTableWidget, QTextEdit, QPlainTextEdit, QTextBrowser {
+  background: white;
+  border: 1px solid #cfd8e6;
+  border-radius: 4px;
+}
+QGroupBox {
+  margin-top: 8px;
+  padding-top: 12px;
+  font-weight: 600;
+}
+QPushButton {
+  background: #1f5f9c;
+  color: white;
+  border: 1px solid #184c7d;
+  border-radius: 4px;
+  padding: 6px 12px;
+}
+QPushButton:hover { background: #2e74b6; }
+QLineEdit, QComboBox, QSpinBox {
+  background: white;
+  border: 1px solid #bcc9da;
+  border-radius: 3px;
+  padding: 5px;
+}
+QHeaderView::section {
+  background: #edf2f7;
+  color: #35506f;
+  padding: 5px;
+  border: 1px solid #d1dbe8;
+  font-weight: 600;
+}
+QTabBar::tab {
+  background: #dde6f0;
+  padding: 8px 14px;
+  margin-right: 2px;
+  border: 1px solid #c6d2e0;
+  border-bottom: none;
+}
+QTabBar::tab:selected {
+  background: white;
+  color: #173b69;
+}
+QTreeWidget::item:selected, QTreeView::item:selected, QTableWidget::item:selected {
+  background: #d7e8fb;
+  color: #173b69;
+}
