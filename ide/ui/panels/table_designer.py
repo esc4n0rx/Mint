@@ -27,24 +27,24 @@ class TableDesignerPanel(QWidget):
     generate_requested = pyqtSignal(TableDefinition)
     delete_requested = pyqtSignal(str)
 
-    HEADERS = ['Campo', 'Descrição', 'Tipo', 'Tam.', 'Esc.', 'Obrig.', 'PK', 'Default', 'Observação']
+    SUMMARY_HEADERS = ['Campo', 'Tipo', 'Obrig.', 'PK']
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.current_name = ''
+        self._syncing = False
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(10)
 
         header = QHBoxLayout()
+        title_box = QVBoxLayout()
         self.title = QLabel('Modelador de Tabelas')
         self.title.setObjectName('WorkbenchTitle')
-        self.subtitle = QLabel('Defina metadados técnicos e estrutura de campos em padrão ERP.')
+        self.subtitle = QLabel('Estruture a tabela em blocos legíveis: cabeçalho, lista de campos e detalhe do campo.')
         self.subtitle.setObjectName('WorkbenchSubtitle')
-        header_left = QVBoxLayout()
-        header_left.addWidget(self.title)
-        header_left.addWidget(self.subtitle)
-        header.addLayout(header_left)
+        title_box.addWidget(self.title)
+        title_box.addWidget(self.subtitle)
+        header.addLayout(title_box)
         header.addStretch(1)
         self.new_btn = QPushButton('Nova tabela')
         self.save_btn = QPushButton('Salvar definição')
@@ -54,72 +54,129 @@ class TableDesignerPanel(QWidget):
             header.addWidget(btn)
         root.addLayout(header)
 
-        splitter = QSplitter(Qt.Vertical)
+        top_split = QSplitter(Qt.Horizontal)
+        top_split.addWidget(self._build_header_box())
+        top_split.addWidget(self._build_summary_box())
+        top_split.setSizes([720, 420])
+        root.addWidget(top_split)
 
-        top = QWidget()
-        top_layout = QHBoxLayout(top)
-        top_layout.setContentsMargins(0, 0, 0, 0)
-
-        form_box = QGroupBox('Cabeçalho técnico')
-        form = QFormLayout(form_box)
-        self.name_edit = QLineEdit()
-        self.description_edit = QLineEdit()
-        self.module_edit = QLineEdit('core')
-        form.addRow('Nome técnico', self.name_edit)
-        form.addRow('Descrição', self.description_edit)
-        form.addRow('Módulo ERP', self.module_edit)
-
-        summary_box = QGroupBox('Resumo estrutural')
-        summary_layout = QVBoxLayout(summary_box)
-        self.summary_label = QLabel('Nenhuma tabela carregada.')
-        self.summary_label.setWordWrap(True)
-        self.generated_path = QLabel('-')
-        self.generated_path.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        summary_layout.addWidget(self.summary_label)
-        summary_layout.addWidget(QLabel('Artefato Mint gerado:'))
-        summary_layout.addWidget(self.generated_path)
-        summary_layout.addStretch(1)
-
-        top_layout.addWidget(form_box, 3)
-        top_layout.addWidget(summary_box, 2)
-
-        bottom = QWidget()
-        bottom_layout = QVBoxLayout(bottom)
-        bottom_layout.setContentsMargins(0, 0, 0, 0)
-        fields_header = QHBoxLayout()
-        fields_header.addWidget(QLabel('Grid de campos'))
-        self.add_row_btn = QPushButton('Adicionar campo')
-        self.remove_row_btn = QPushButton('Remover linha')
-        fields_header.addStretch(1)
-        fields_header.addWidget(self.add_row_btn)
-        fields_header.addWidget(self.remove_row_btn)
-        bottom_layout.addLayout(fields_header)
-        self.fields_table = QTableWidget(0, len(self.HEADERS))
-        self.fields_table.setHorizontalHeaderLabels(self.HEADERS)
-        self.fields_table.horizontalHeader().setStretchLastSection(True)
-        self.fields_table.verticalHeader().setVisible(False)
-        bottom_layout.addWidget(self.fields_table)
-        self.notes = QTextEdit()
-        self.notes.setPlaceholderText('Notas de modelagem, constraints futuras, observações de integração...')
-        bottom_layout.addWidget(QLabel('Notas da tabela'))
-        bottom_layout.addWidget(self.notes)
-
-        splitter.addWidget(top)
-        splitter.addWidget(bottom)
-        splitter.setSizes([180, 420])
-        root.addWidget(splitter)
+        field_split = QSplitter(Qt.Horizontal)
+        field_split.addWidget(self._build_fields_box())
+        field_split.addWidget(self._build_field_detail_box())
+        field_split.setSizes([640, 560])
+        root.addWidget(field_split, 1)
 
         self.new_btn.clicked.connect(self.clear_form)
-        self.add_row_btn.clicked.connect(lambda: self._append_field())
+        self.add_row_btn.clicked.connect(self._append_field)
         self.remove_row_btn.clicked.connect(self._remove_selected_field)
         self.save_btn.clicked.connect(self._emit_save)
         self.generate_btn.clicked.connect(self._emit_generate)
         self.delete_btn.clicked.connect(self._emit_delete)
+        self.fields_table.currentCellChanged.connect(self._load_selected_field)
 
+        self._connect_detail_signals()
         self.clear_form()
 
+    def _build_header_box(self) -> QWidget:
+        box = QGroupBox('Cabeçalho técnico da tabela')
+        form = QFormLayout(box)
+        self.name_edit = QLineEdit()
+        self.description_edit = QLineEdit()
+        self.module_edit = QLineEdit('core')
+        self.notes = QTextEdit()
+        self.notes.setMinimumHeight(100)
+        self.notes.setPlaceholderText('Contexto funcional, restrições, integração com MintDB, observações do objeto ERP...')
+        form.addRow('Nome técnico', self.name_edit)
+        form.addRow('Descrição', self.description_edit)
+        form.addRow('Módulo ERP', self.module_edit)
+        form.addRow('Notas da tabela', self.notes)
+        return box
+
+    def _build_summary_box(self) -> QWidget:
+        box = QGroupBox('Resumo estrutural')
+        layout = QVBoxLayout(box)
+        self.summary_label = QLabel('Nenhuma tabela carregada.')
+        self.summary_label.setWordWrap(True)
+        self.generated_path = QLabel('-')
+        self.generated_path.setWordWrap(True)
+        self.generated_path.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        layout.addWidget(self.summary_label)
+        layout.addWidget(QLabel('Artefato Mint gerado'))
+        layout.addWidget(self.generated_path)
+        layout.addStretch(1)
+        return box
+
+    def _build_fields_box(self) -> QWidget:
+        box = QGroupBox('Campos da tabela')
+        layout = QVBoxLayout(box)
+        toolbar = QHBoxLayout()
+        toolbar.addWidget(QLabel('Selecione um campo para editar os detalhes ao lado.'))
+        toolbar.addStretch(1)
+        self.add_row_btn = QPushButton('Adicionar campo')
+        self.remove_row_btn = QPushButton('Remover campo')
+        toolbar.addWidget(self.add_row_btn)
+        toolbar.addWidget(self.remove_row_btn)
+        layout.addLayout(toolbar)
+
+        self.fields_table = QTableWidget(0, len(self.SUMMARY_HEADERS))
+        self.fields_table.setHorizontalHeaderLabels(self.SUMMARY_HEADERS)
+        self.fields_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.fields_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.fields_table.setWordWrap(True)
+        self.fields_table.verticalHeader().setVisible(False)
+        self.fields_table.verticalHeader().setDefaultSectionSize(42)
+        header = self.fields_table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setMinimumSectionSize(90)
+        header.resizeSection(0, 220)
+        header.resizeSection(1, 130)
+        header.resizeSection(2, 90)
+        header.resizeSection(3, 70)
+        layout.addWidget(self.fields_table)
+        return box
+
+    def _build_field_detail_box(self) -> QWidget:
+        box = QGroupBox('Detalhe do campo selecionado')
+        form = QFormLayout(box)
+        self.field_name_edit = QLineEdit()
+        self.field_description_edit = QLineEdit()
+        self.field_type_combo = QComboBox()
+        self.field_type_combo.addItems(SUPPORTED_FIELD_TYPES)
+        self.field_length_edit = QLineEdit()
+        self.field_scale_edit = QLineEdit()
+        self.field_required = QCheckBox('Obrigatório')
+        self.field_primary = QCheckBox('Chave primária')
+        self.field_default_edit = QLineEdit()
+        self.field_notes_edit = QTextEdit()
+        self.field_notes_edit.setMinimumHeight(120)
+
+        form.addRow('Nome técnico', self.field_name_edit)
+        form.addRow('Descrição', self.field_description_edit)
+        form.addRow('Tipo', self.field_type_combo)
+        form.addRow('Tamanho', self.field_length_edit)
+        form.addRow('Precisão / escala', self.field_scale_edit)
+        form.addRow(self.field_required)
+        form.addRow(self.field_primary)
+        form.addRow('Valor default', self.field_default_edit)
+        form.addRow('Observações', self.field_notes_edit)
+        return box
+
+    def _connect_detail_signals(self) -> None:
+        widgets = [
+            self.field_name_edit,
+            self.field_description_edit,
+            self.field_length_edit,
+            self.field_scale_edit,
+            self.field_default_edit,
+        ]
+        for widget in widgets:
+            widget.textChanged.connect(self._save_selected_field)
+        self.field_notes_edit.textChanged.connect(self._save_selected_field)
+        self.field_type_combo.currentTextChanged.connect(self._save_selected_field)
+        self.field_required.toggled.connect(self._save_selected_field)
+        self.field_primary.toggled.connect(self._save_selected_field)
+
     def clear_form(self) -> None:
-        self.current_name = ''
         self.name_edit.clear()
         self.description_edit.clear()
         self.module_edit.setText('core')
@@ -130,40 +187,32 @@ class TableDesignerPanel(QWidget):
         self._refresh_summary()
 
     def load_definition(self, definition: TableDefinition) -> None:
-        self.current_name = definition.name
+        self._syncing = True
         self.name_edit.setText(definition.name)
         self.description_edit.setText(definition.description)
         self.module_edit.setText(definition.module)
+        self.notes.setPlainText('')
         self.generated_path.setText(definition.generated_code_path or '-')
-        self.notes.setPlainText('\n'.join(field.notes for field in definition.fields if field.notes))
         self.fields_table.setRowCount(0)
         for field in definition.fields:
             self._append_field(field)
-        self._refresh_summary()
+        self._syncing = False
+        if self.fields_table.rowCount():
+            self.fields_table.selectRow(0)
+            self._load_selected_field(0, 0, -1, -1)
+        self._refresh_summary(definition)
 
     def collect_definition(self) -> TableDefinition | None:
+        self._save_selected_field()
         name = self.name_edit.text().strip()
         if not name:
             QMessageBox.warning(self, 'Tabela', 'Informe o nome técnico da tabela.')
             return None
-        fields: list[FieldDefinition] = []
+        fields = []
         for row in range(self.fields_table.rowCount()):
-            name_item = self.fields_table.item(row, 0)
-            if not name_item or not name_item.text().strip():
-                continue
-            fields.append(
-                FieldDefinition(
-                    name=name_item.text().strip(),
-                    description=(self.fields_table.item(row, 1).text() if self.fields_table.item(row, 1) else ''),
-                    field_type=self._combo_value(row, 2),
-                    length=(self.fields_table.item(row, 3).text() if self.fields_table.item(row, 3) else ''),
-                    scale=(self.fields_table.item(row, 4).text() if self.fields_table.item(row, 4) else ''),
-                    required=self._checkbox_value(row, 5),
-                    primary_key=self._checkbox_value(row, 6),
-                    default_value=(self.fields_table.item(row, 7).text() if self.fields_table.item(row, 7) else ''),
-                    notes=(self.fields_table.item(row, 8).text() if self.fields_table.item(row, 8) else ''),
-                )
-            )
+            field = self._field_from_row(row)
+            if field and field.name.strip():
+                fields.append(field)
         if not fields:
             QMessageBox.warning(self, 'Tabela', 'Adicione ao menos um campo à tabela.')
             return None
@@ -178,47 +227,94 @@ class TableDesignerPanel(QWidget):
         return definition
 
     def _append_field(self, field: FieldDefinition | None = None, primary_key: bool = False) -> None:
+        field = field or FieldDefinition(name='new_field', field_type='string', required=primary_key, primary_key=primary_key)
         row = self.fields_table.rowCount()
         self.fields_table.insertRow(row)
-        field = field or FieldDefinition(primary_key=primary_key, required=primary_key)
-        for col, value in enumerate([
-            field.name,
-            field.description,
-            None,
-            field.length,
-            field.scale,
-            None,
-            None,
-            field.default_value,
-            field.notes,
-        ]):
-            if value is None:
-                continue
-            self.fields_table.setItem(row, col, QTableWidgetItem(str(value)))
-        combo = QComboBox()
-        combo.addItems(SUPPORTED_FIELD_TYPES)
-        combo.setCurrentText(field.field_type or 'string')
-        self.fields_table.setCellWidget(row, 2, combo)
-        for col, checked in [(5, field.required), (6, field.primary_key)]:
-            checkbox = QCheckBox()
-            checkbox.setChecked(checked)
-            checkbox.setStyleSheet('margin-left:18px;')
-            self.fields_table.setCellWidget(row, col, checkbox)
+        self._store_field_in_row(row, field)
+        if row == 0:
+            self.fields_table.selectRow(0)
+            self._load_selected_field(0, 0, -1, -1)
 
     def _remove_selected_field(self) -> None:
         row = self.fields_table.currentRow()
         if row >= 0:
             self.fields_table.removeRow(row)
+            if self.fields_table.rowCount():
+                self.fields_table.selectRow(max(0, row - 1))
+                self._load_selected_field(self.fields_table.currentRow(), 0, -1, -1)
+            else:
+                self._set_detail_field(None)
 
-    def _combo_value(self, row: int, col: int) -> str:
-        combo = self.fields_table.cellWidget(row, col)
-        return combo.currentText() if isinstance(combo, QComboBox) else 'string'
+    def _field_from_row(self, row: int) -> FieldDefinition | None:
+        item = self.fields_table.item(row, 0)
+        if item is None:
+            return None
+        data = item.data(Qt.UserRole)
+        if isinstance(data, dict):
+            return FieldDefinition.from_dict(data)
+        return None
 
-    def _checkbox_value(self, row: int, col: int) -> bool:
-        checkbox = self.fields_table.cellWidget(row, col)
-        return checkbox.isChecked() if isinstance(checkbox, QCheckBox) else False
+    def _store_field_in_row(self, row: int, field: FieldDefinition) -> None:
+        values = [field.name, field.field_type, 'Sim' if field.required else 'Não', 'Sim' if field.primary_key else 'Não']
+        for col, value in enumerate(values):
+            item = self.fields_table.item(row, col)
+            if item is None:
+                item = QTableWidgetItem()
+                self.fields_table.setItem(row, col, item)
+            item.setText(value)
+            if col == 0:
+                item.setData(Qt.UserRole, field.to_dict())
+        self._refresh_summary()
+
+    def _load_selected_field(self, current_row: int, _current_col: int, _previous_row: int, _previous_col: int) -> None:
+        field = self._field_from_row(current_row) if current_row >= 0 else None
+        self._set_detail_field(field)
+
+    def _set_detail_field(self, field: FieldDefinition | None) -> None:
+        self._syncing = True
+        if field is None:
+            self.field_name_edit.clear()
+            self.field_description_edit.clear()
+            self.field_type_combo.setCurrentText('string')
+            self.field_length_edit.clear()
+            self.field_scale_edit.clear()
+            self.field_required.setChecked(False)
+            self.field_primary.setChecked(False)
+            self.field_default_edit.clear()
+            self.field_notes_edit.clear()
+        else:
+            self.field_name_edit.setText(field.name)
+            self.field_description_edit.setText(field.description)
+            self.field_type_combo.setCurrentText(field.field_type or 'string')
+            self.field_length_edit.setText(field.length)
+            self.field_scale_edit.setText(field.scale)
+            self.field_required.setChecked(field.required)
+            self.field_primary.setChecked(field.primary_key)
+            self.field_default_edit.setText(field.default_value)
+            self.field_notes_edit.setPlainText(field.notes)
+        self._syncing = False
+
+    def _save_selected_field(self) -> None:
+        if self._syncing:
+            return
+        row = self.fields_table.currentRow()
+        if row < 0:
+            return
+        field = FieldDefinition(
+            name=self.field_name_edit.text().strip(),
+            description=self.field_description_edit.text().strip(),
+            field_type=self.field_type_combo.currentText(),
+            length=self.field_length_edit.text().strip(),
+            scale=self.field_scale_edit.text().strip(),
+            required=self.field_required.isChecked(),
+            primary_key=self.field_primary.isChecked(),
+            default_value=self.field_default_edit.text().strip(),
+            notes=self.field_notes_edit.toPlainText().strip(),
+        )
+        self._store_field_in_row(row, field)
 
     def _refresh_summary(self, definition: TableDefinition | None = None) -> None:
+        fields_count = self.fields_table.rowCount()
         definition = definition or TableDefinition(
             name=self.name_edit.text().strip() or 'nova_tabela',
             description=self.description_edit.text().strip(),
@@ -226,8 +322,10 @@ class TableDesignerPanel(QWidget):
             fields=[],
         )
         self.summary_label.setText(
-            f"Tabela <b>{definition.name}</b> no módulo <b>{definition.module}</b>.<br>"
-            f"Descrição: {definition.description or 'Sem descrição'}"
+            f"Tabela <b>{definition.name}</b><br>"
+            f"Módulo: <b>{definition.module}</b><br>"
+            f"Descrição: {definition.description or 'Sem descrição'}<br>"
+            f"Campos cadastrados: <b>{fields_count}</b>"
         )
 
     def _emit_save(self) -> None:

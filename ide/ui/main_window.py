@@ -39,7 +39,6 @@ from ide.ui.editor_tabs import EditorTabs
 from ide.ui.panels.execution_panel import ExecutionPanel
 from ide.ui.panels.help_panel import HelpPanel
 from ide.ui.panels.module_browser import ModuleBrowserPanel
-from ide.ui.panels.object_dashboard import ObjectDashboardPanel
 from ide.ui.panels.table_designer import TableDesignerPanel
 from ide.ui.status_bar import IdeStatusBar
 from ide.ui.widgets.erp_navigation import ErpNavigationPanel
@@ -57,7 +56,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle('Mint ERP Studio')
-        self.resize(1560, 940)
+        self.resize(1500, 920)
 
         self.settings = SettingsManager()
         self.config = self.settings.load_all()
@@ -70,6 +69,7 @@ class MainWindow(QMainWindow):
         self._latest_validation_request = 0
         self._active_execution_record: ExecutionRecord | None = None
         self._execution_output_buffer: list[str] = []
+        self._active_run_path = ''
 
         workspace_path = self._default_workspace()
         self.workbench = WorkbenchService(workspace_path)
@@ -83,7 +83,6 @@ class MainWindow(QMainWindow):
         self.navigation = ErpNavigationPanel()
         self.navigation.object_requested.connect(self._handle_navigation)
 
-        self.dashboard_panel = ObjectDashboardPanel()
         self.table_panel = TableDesignerPanel()
         self.module_panel = ModuleBrowserPanel()
         self.execution_panel = ExecutionPanel()
@@ -108,36 +107,31 @@ class MainWindow(QMainWindow):
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
 
-        self.detail_tabs = QTabWidget()
-        self.detail_tabs.addTab(self.table_list, 'Catálogo de tabelas')
-        self.detail_tabs.addTab(self.table_panel, 'Designer de tabela')
-        self.detail_tabs.addTab(self.module_panel, 'Módulos ERP')
-        self.detail_tabs.addTab(self.editor_tabs, 'Editor Mint')
-        self.detail_tabs.addTab(self.execution_panel, 'Execução')
-        self.detail_tabs.addTab(self.help_panel, 'Ajuda')
+        self.tables_tab = QTabWidget()
+        self.tables_tab.addTab(self.table_list, 'Catálogo')
+        self.tables_tab.addTab(self.table_panel, 'Designer')
+
+        self.main_tabs = QTabWidget()
+        self.main_tabs.addTab(self.tables_tab, 'Tabelas')
+        self.main_tabs.addTab(self.module_panel, 'Módulos')
+        self.main_tabs.addTab(self.editor_tabs, 'Editor')
+        self.main_tabs.addTab(self.execution_panel, 'Execução')
+        self.main_tabs.addTab(self.help_panel, 'Ajuda')
 
         self.bottom_tabs = QTabWidget()
         self.bottom_tabs.addTab(self.problems_table, 'Diagnósticos')
-        self.bottom_tabs.addTab(self.log_view, 'Logs do workbench')
+        self.bottom_tabs.addTab(self.log_view, 'Logs')
 
         center_split = QSplitter(Qt.Vertical)
-        center_split.addWidget(self.detail_tabs)
+        center_split.addWidget(self.main_tabs)
         center_split.addWidget(self.bottom_tabs)
-        center_split.setSizes([760, 180])
+        center_split.setSizes([760, 170])
 
         root_split = QSplitter(Qt.Horizontal)
         root_split.addWidget(self.navigation)
         root_split.addWidget(center_split)
-        root_split.setSizes([280, 1280])
-
-        dashboard_container = QWidget()
-        dashboard_layout = QVBoxLayout(dashboard_container)
-        dashboard_layout.setContentsMargins(0, 0, 0, 0)
-        dashboard_layout.addWidget(self.dashboard_panel)
-        dashboard_layout.addWidget(root_split)
-        dashboard_layout.setStretch(0, 0)
-        dashboard_layout.setStretch(1, 1)
-        self.setCentralWidget(dashboard_container)
+        root_split.setSizes([250, 1250])
+        self.setCentralWidget(root_split)
 
         self.status = IdeStatusBar()
         self.setStatusBar(self.status)
@@ -152,11 +146,10 @@ class MainWindow(QMainWindow):
         self._apply_editor_font()
         self._restore_last_workspace()
         self._refresh_table_catalog()
-        self._refresh_dashboard()
         self._refresh_execution_history()
         self.module_panel.set_root_path(str(self.workbench.modules_dir))
         self.help_panel.set_topic(*HELP_TOPICS['syntax'])
-        self.log_view.setPlainText('Mint ERP Studio inicializado.\nUse a árvore à esquerda como navegação principal do workbench.')
+        self.log_view.setPlainText('Mint ERP Studio inicializado.\nA navegação principal está à esquerda e as áreas centrais foram simplificadas em abas.')
 
     def _default_workspace(self) -> str:
         last = self.config.get('last_workspace')
@@ -178,7 +171,7 @@ class MainWindow(QMainWindow):
 
     def _build_actions(self) -> None:
         self.act_new_module = QAction('Novo módulo', self, triggered=lambda: self._create_module(str(self.workbench.modules_dir)))
-        self.act_new_table = QAction('Nova tabela', self, triggered=self.table_panel.clear_form)
+        self.act_new_table = QAction('Nova tabela', self, triggered=self._open_new_table)
         self.act_open_workspace = QAction('Abrir projeto', self, shortcut='Ctrl+Shift+O', triggered=self.open_workspace_dialog)
         self.act_open_file = QAction('Abrir .mint', self, shortcut='Ctrl+O', triggered=self.open_file_dialog)
         self.act_save = QAction('Salvar', self, shortcut='Ctrl+S', triggered=self.save_current)
@@ -191,14 +184,13 @@ class MainWindow(QMainWindow):
     def _build_menus(self) -> None:
         file_menu = self.menuBar().addMenu('Projeto')
         file_menu.addActions([self.act_open_workspace, self.act_open_file, self.act_save, self.act_save_all])
-        design_menu = self.menuBar().addMenu('Workbench')
-        design_menu.addActions([self.act_new_table, self.act_new_module, self.act_run, self.act_lint])
+        workbench_menu = self.menuBar().addMenu('Workbench')
+        workbench_menu.addActions([self.act_new_table, self.act_new_module, self.act_run, self.act_lint])
         help_menu = self.menuBar().addMenu('Ajuda')
         help_menu.addActions([self.act_settings, self.act_about])
 
     def _build_toolbar(self) -> None:
         toolbar = self.addToolBar('Workbench')
-        toolbar.setObjectName('WorkbenchToolbar')
         for action in [self.act_open_workspace, self.act_new_table, self.act_new_module, self.act_save, self.act_run, self.act_lint]:
             toolbar.addAction(action)
 
@@ -212,6 +204,7 @@ class MainWindow(QMainWindow):
         self.module_panel.rename_requested.connect(self._rename_path)
         self.module_panel.delete_requested.connect(self._delete_path)
         self.execution_panel.execute_requested.connect(self._execute_request)
+        self.execution_panel.target_changed.connect(self._refresh_execution_functions)
 
     def _wire_runner(self) -> None:
         self.runner.started.connect(lambda p: self._append_log(f'[run] {p}'))
@@ -238,8 +231,8 @@ class MainWindow(QMainWindow):
         self._ensure_example_programs()
         self.module_panel.set_root_path(str(self.workbench.modules_dir))
         self._refresh_table_catalog()
-        self._refresh_dashboard()
         self._refresh_execution_history()
+        self._refresh_execution_functions(self.execution_panel.target_path.text().strip())
 
     def open_workspace_dialog(self) -> None:
         path = QFileDialog.getExistingDirectory(self, 'Abrir projeto', str(Path.cwd()))
@@ -253,10 +246,11 @@ class MainWindow(QMainWindow):
 
     def open_file(self, file_path: str) -> None:
         existing = self.editor_tabs.index_of_path(file_path)
-        self.detail_tabs.setCurrentWidget(self.editor_tabs)
+        self.main_tabs.setCurrentWidget(self.editor_tabs)
         if existing >= 0:
             self.editor_tabs.setCurrentIndex(existing)
             self.status.set_file(file_path)
+            self.execution_panel.set_target_path(file_path)
             return
         try:
             content = self.files.read_text(file_path)
@@ -269,7 +263,7 @@ class MainWindow(QMainWindow):
             editor.textChanged.connect(self._queue_realtime_validation)
         self.project.add_recent_file(file_path)
         self.status.set_file(file_path)
-        self.execution_panel.target_path.setText(file_path)
+        self.execution_panel.set_target_path(file_path)
         self._queue_realtime_validation()
 
     def save_current(self) -> None:
@@ -278,8 +272,7 @@ class MainWindow(QMainWindow):
             return
         path = self.editor_tabs.current_path()
         if not path:
-            folder = self.workbench.modules_dir
-            path, _ = QFileDialog.getSaveFileName(self, 'Salvar arquivo', str(folder), 'Mint files (*.mint);;All files (*.*)')
+            path, _ = QFileDialog.getSaveFileName(self, 'Salvar arquivo', str(self.workbench.modules_dir), 'Mint files (*.mint);;All files (*.*)')
             if not path:
                 return
             self.editor_tabs.set_current_path(path)
@@ -287,6 +280,7 @@ class MainWindow(QMainWindow):
         editor.document().setModified(False)
         self.editor_tabs.mark_modified(path, False)
         self.status.set_file(path)
+        self.execution_panel.set_target_path(path)
         if self.config.get('auto_lint_on_save'):
             self.lint_current()
 
@@ -302,8 +296,16 @@ class MainWindow(QMainWindow):
         if not path:
             QMessageBox.information(self, 'Execução', 'Abra ou informe um arquivo .mint para executar.')
             return
-        request = ExecutionRequest(target_path=path, parameters=[p.strip() for p in self.execution_panel.parameters.text().split(',') if p.strip()], workspace=str(self.workbench.workspace))
-        self._execute_request(request)
+        if self.main_tabs.currentWidget() != self.execution_panel:
+            self.main_tabs.setCurrentWidget(self.execution_panel)
+        self._execute_request(ExecutionRequest(target_path=path, mode=self.execution_panel.mode_combo.currentText(), function_name=self.execution_panel.function_name.currentData()[0] if self.execution_panel.mode_combo.currentText() == 'function' and self.execution_panel.function_name.currentData() else '', parameters=self._collect_execution_parameters(), workspace=str(self.workbench.workspace)))
+
+    def _collect_execution_parameters(self) -> list[str]:
+        params = []
+        for row in range(self.execution_panel.parameters_table.rowCount()):
+            item = self.execution_panel.parameters_table.item(row, 2)
+            params.append(item.text().strip() if item else '')
+        return params
 
     def lint_current(self) -> None:
         path = self.editor_tabs.current_path()
@@ -322,18 +324,41 @@ class MainWindow(QMainWindow):
         if not path.exists():
             QMessageBox.warning(self, 'Execução', f'Objeto não encontrado: {path}')
             return
-        self.execution_panel.target_path.setText(str(path))
-        self.detail_tabs.setCurrentWidget(self.execution_panel)
+        run_path = path
+        run_as_python = False
+        if request.mode == 'function':
+            if not request.function_name:
+                QMessageBox.warning(self, 'Execução', 'Selecione uma função para executar.')
+                return
+            try:
+                run_path = self.execution_service.build_function_launcher(str(path), request.function_name, request.parameters)
+                run_as_python = True
+            except Exception as exc:
+                QMessageBox.warning(self, 'Execução', f'Falha ao preparar execução da função: {exc}')
+                return
+        self._active_run_path = str(run_path)
+        self.execution_panel.output.clear()
         record = self.execution_service.add_record(request)
         self._active_execution_record = record
-        self._execution_output_buffer = [f'Execução iniciada para {path.name}', f'Parâmetros: {request.parameters or ["<nenhum>"]}']
-        self.execution_panel.output.clear()
-        for chunk in self._execution_output_buffer:
-            self.execution_panel.append_output(chunk)
+        self._execution_output_buffer = [f'Execução iniciada: {request.mode}', f'Origem: {path}', f'Parâmetros: {request.parameters or ["<nenhum>"]}']
+        if request.function_name:
+            self._execution_output_buffer.append(f'Função: {request.function_name}')
+        for line in self._execution_output_buffer:
+            self.execution_panel.append_output(line)
         self._refresh_execution_history()
         if self.editor_tabs.current_editor() and self.editor_tabs.current_path() == str(path) and self.editor_tabs.current_editor().document().isModified():
             self.save_current()
-        self.runner.run_file(str(path), str(self.workbench.workspace))
+        if run_as_python:
+            self.runner.run_python_script(str(run_path), str(self.workbench.workspace))
+        else:
+            self.runner.run_file(str(run_path), str(self.workbench.workspace))
+
+    def _refresh_execution_functions(self, target_path: str) -> None:
+        try:
+            functions = self.execution_service.list_functions(target_path) if target_path else []
+        except Exception:
+            functions = []
+        self.execution_panel.set_functions(functions)
 
     def _handle_runner_output(self, text: str) -> None:
         self._execution_output_buffer.append(text.rstrip())
@@ -354,7 +379,6 @@ class MainWindow(QMainWindow):
     def _save_table_definition(self, definition: TableDefinition) -> None:
         self.table_service.save_table(definition)
         self._refresh_table_catalog()
-        self._refresh_dashboard()
         self._append_log(f'Tabela salva: {definition.name}')
         QMessageBox.information(self, 'Tabelas', f'Tabela {definition.name} salva com sucesso.')
 
@@ -371,7 +395,6 @@ class MainWindow(QMainWindow):
         self.table_service.delete_table(name)
         self.table_panel.clear_form()
         self._refresh_table_catalog()
-        self._refresh_dashboard()
 
     def _refresh_table_catalog(self) -> None:
         tables = self.table_service.list_tables()
@@ -382,18 +405,6 @@ class MainWindow(QMainWindow):
             for col, value in enumerate([definition.name, definition.description, definition.module, str(len(definition.fields))]):
                 self.table_list.setItem(row, col, QTableWidgetItem(value))
 
-    def _refresh_dashboard(self) -> None:
-        tables = len(self.table_service.list_tables())
-        modules = len(list(self.workbench.modules_dir.rglob('*.mint')))
-        generated = len(list((self.workbench.generated_dir / 'tables').glob('*.mint'))) if (self.workbench.generated_dir / 'tables').exists() else 0
-        runs = len(self.execution_service.list_history())
-        self.dashboard_panel.set_rows([
-            ('Tabelas internas', str(tables), 'Modelagem visual e geração Mint'),
-            ('Módulos Mint', str(modules), 'Árvore técnica reutilizável'),
-            ('Artefatos gerados', str(generated), 'Definições sincronizadas do modelador'),
-            ('Execuções', str(runs), 'Histórico operacional do workbench'),
-        ])
-
     def _refresh_execution_history(self) -> None:
         self.execution_panel.set_history(self.execution_service.list_history())
 
@@ -402,7 +413,13 @@ class MainWindow(QMainWindow):
         definition = self.table_service.get_table(table_name)
         if definition:
             self.table_panel.load_definition(definition)
-            self.detail_tabs.setCurrentWidget(self.table_panel)
+            self.main_tabs.setCurrentWidget(self.tables_tab)
+            self.tables_tab.setCurrentWidget(self.table_panel)
+
+    def _open_new_table(self) -> None:
+        self.table_panel.clear_form()
+        self.main_tabs.setCurrentWidget(self.tables_tab)
+        self.tables_tab.setCurrentWidget(self.table_panel)
 
     def _create_module(self, base_path: str) -> None:
         name, ok = QInputDialog.getText(self, 'Novo módulo', 'Nome técnico do módulo/pasta')
@@ -411,7 +428,6 @@ class MainWindow(QMainWindow):
             if target.is_file():
                 target = target.parent
             self.module_service.create_module(name, str(target))
-            self._refresh_dashboard()
 
     def _create_module_file(self, base_path: str) -> None:
         name, ok = QInputDialog.getText(self, 'Novo arquivo Mint', 'Nome do arquivo .mint')
@@ -421,7 +437,6 @@ class MainWindow(QMainWindow):
                 folder = folder.parent
             file_path = self.module_service.create_mint_file(str(folder), name)
             self.open_file(str(file_path))
-            self._refresh_dashboard()
 
     def _rename_path(self, path: str) -> None:
         if not path:
@@ -430,42 +445,41 @@ class MainWindow(QMainWindow):
         name, ok = QInputDialog.getText(self, 'Renomear', 'Novo nome', text=current.name)
         if ok and name:
             self.files.rename(str(current), str(current.with_name(name)))
-            self._refresh_dashboard()
 
     def _delete_path(self, path: str) -> None:
         if not path:
             return
         if QMessageBox.question(self, 'Excluir', f'Excluir {path}?') == QMessageBox.Yes:
             self.files.delete(path)
-            self._refresh_dashboard()
 
     def _handle_navigation(self, kind: str, key: str) -> None:
         if kind != 'section':
             return
         if key == 'tables':
-            self.detail_tabs.setCurrentWidget(self.table_list)
+            self.main_tabs.setCurrentWidget(self.tables_tab)
+            self.tables_tab.setCurrentWidget(self.table_list)
         elif key == 'modules':
-            self.detail_tabs.setCurrentWidget(self.module_panel)
+            self.main_tabs.setCurrentWidget(self.module_panel)
         elif key == 'programs':
             program = next(self.workbench.programs_dir.glob('*.mint'), None)
             if program:
                 self.open_file(str(program))
         elif key == 'executions':
-            self.detail_tabs.setCurrentWidget(self.execution_panel)
+            self.main_tabs.setCurrentWidget(self.execution_panel)
         elif key in HELP_TOPICS:
             title, html = HELP_TOPICS[key]
             self.help_panel.set_topic(title, html)
-            self.detail_tabs.setCurrentWidget(self.help_panel)
+            self.main_tabs.setCurrentWidget(self.help_panel)
         elif key == 'logs':
             self.bottom_tabs.setCurrentWidget(self.log_view)
         elif key == 'settings':
             self.open_settings()
         elif key == 'environment':
             self.help_panel.set_topic('Ambiente', f'<p>Workspace atual: <code>{self.workbench.workspace}</code></p><p>Módulos: <code>{self.workbench.modules_dir}</code></p><p>Metadata: <code>{self.workbench.workbench_dir}</code></p>')
-            self.detail_tabs.setCurrentWidget(self.help_panel)
+            self.main_tabs.setCurrentWidget(self.help_panel)
         else:
             self.help_panel.set_topic('Workbench', '<p>Área preparada para expansão futura do ERP Mint.</p>')
-            self.detail_tabs.setCurrentWidget(self.help_panel)
+            self.main_tabs.setCurrentWidget(self.help_panel)
 
     def _append_log(self, text: str) -> None:
         self.log_view.append(text.rstrip())

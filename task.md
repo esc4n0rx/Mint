@@ -273,3 +273,6 @@ Registro consolidado das funcionalidades implementadas.
 - Editor Mint existente reaproveitado com syntax highlight mantido e visual ajustado ao tema corporativo claro.
 - Centro de execução com histórico local, output estruturado e logs persistidos em `.mint_workbench`.
 - Documentação adicionada em `ide/README.md` e `ide/docs/workbench_architecture.md`.
+
+- Ajustes posteriores: remoção do painel inicial/visão geral, reorganização das áreas principais em abas centrais e execução dinâmica de funções com parâmetros no centro de execução.
+- Ajuste de persistência: o workbench de tabelas deixou de gravar JSON auxiliar e passou a usar `workbench.mintdb` como backend nativo para catálogo e schemas.

@@ -16,11 +16,11 @@ A aplicação deixou de ser centrada em uma IDE tradicional. O foco atual é:
 ## Áreas principais
 
 - **ERP Workbench**: árvore principal com Projeto, Sistema e Ajuda.
-- **Catálogo de tabelas**: lista de definições persistidas em `.mint_workbench/tables/*.json`.
+- **Catálogo de tabelas**: lista de tabelas persistidas nativamente em `.mint_workbench/workbench.mintdb`.
 - **Designer de tabela**: formulário + grid para campos, tipos, PK, default e observações.
 - **Módulos ERP**: árvore de `modules/` com criação de pasta e arquivos `.mint`.
 - **Editor Mint**: editor legado reaproveitado com highlight, lint e diagnósticos em tempo real.
-- **Centro de execução**: execução de programas `.mint`, output estruturado e histórico local.
+- **Centro de execução**: execução de programas `.mint` ou funções específicas com parâmetros dinâmicos, output estruturado e histórico local.
 
 ## Estrutura interna
 
@@ -35,7 +35,7 @@ A aplicação deixou de ser centrada em uma IDE tradicional. O foco atual é:
 
 Ao abrir um workspace, o studio cria/usa:
 
-- `.mint_workbench/tables/` → definições JSON das tabelas;
+- `.mint_workbench/workbench.mintdb` → catálogo e schemas persistidos via MintDB nativo;
 - `.mint_workbench/metadata/execution_history.json` → histórico de execuções;
 - `.mint_workbench/logs/` → logs de output;
 - `generated/tables/` → artefatos `.mint` gerados a partir do modelador;
@@ -61,7 +61,7 @@ python -m ide.main
 2. Vá para a aba **Designer de tabela**.
 3. Preencha nome, descrição e módulo.
 4. Adicione campos no grid.
-5. Salve e, se desejar, clique em **Gerar Mint**.
+5. Salve para materializar a tabela no `workbench.mintdb` nativo e, se desejar, clique em **Gerar Mint**.
 
 ### 2. Criar módulo
 1. Abra **Projeto → Módulos**.
@@ -71,9 +71,9 @@ python -m ide.main
 
 ### 3. Executar programa
 1. Abra o arquivo `.mint` no editor ou informe o caminho no **Centro de execução**.
-2. Informe parâmetros textuais, se necessário para documentação operacional.
-3. Clique em **Executar**.
-4. Consulte output, histórico e logs.
+2. Escolha entre executar o programa inteiro ou uma função específica.
+3. Preencha os parâmetros dinâmicos gerados a partir da assinatura da função.
+4. Clique em **Executar** e acompanhe output, histórico e logs.
 
 ## Próximos passos recomendados
 
