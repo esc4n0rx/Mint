@@ -58,7 +58,7 @@ class MintEditor(QPlainTextEdit):
 
     def line_number_area_paint_event(self, event):
         painter = QPainter(self._line_number_area)
-        painter.fillRect(event.rect(), QColor("#2b2f37"))
+        painter.fillRect(event.rect(), QColor('#eef3f8'))
 
         block = self.firstVisibleBlock()
         block_number = block.blockNumber()
@@ -68,7 +68,7 @@ class MintEditor(QPlainTextEdit):
         while block.isValid() and top <= event.rect().bottom():
             if block.isVisible() and bottom >= event.rect().top():
                 number = str(block_number + 1)
-                painter.setPen(QColor("#8b949e"))
+                painter.setPen(QColor('#6a7a8c'))
                 painter.drawText(0, top, self._line_number_area.width() - 4, self.fontMetrics().height(), Qt.AlignRight, number)
             block = block.next()
             top = bottom
@@ -79,7 +79,7 @@ class MintEditor(QPlainTextEdit):
         selections = []
 
         line_sel = QTextEdit.ExtraSelection()
-        line_sel.format.setBackground(QColor("#2c313a"))
+        line_sel.format.setBackground(QColor('#e8f1fb'))
         line_sel.format.setProperty(QTextFormat.FullWidthSelection, True)
         line_sel.cursor = self.textCursor()
         line_sel.cursor.clearSelection()

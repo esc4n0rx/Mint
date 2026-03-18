@@ -11,11 +11,11 @@ from ide.ui.main_window import MainWindow
 
 def create_app(argv=None) -> QApplication:
     app = QApplication(argv or sys.argv)
-    app.setApplicationName("Mint IDE")
-    app.setOrganizationName("MintLang")
+    app.setApplicationName('Mint ERP Studio')
+    app.setOrganizationName('MintLang')
 
     settings = SettingsManager()
-    selected_theme = settings.load_all().get("theme", "dark")
+    selected_theme = settings.load_all().get('theme', 'light')
     ThemeManager().apply(app, selected_theme)
     return app
 

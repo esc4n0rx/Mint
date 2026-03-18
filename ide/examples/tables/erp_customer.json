@@ -1,0 +1,11 @@
+{
+  "name": "erp_customer",
+  "description": "Cadastro de clientes do ERP Mint.",
+  "module": "sales",
+  "fields": [
+    {"name": "id", "description": "Identificador", "field_type": "uuid", "length": "", "scale": "", "required": true, "primary_key": true, "default_value": "", "notes": ""},
+    {"name": "name", "description": "Nome do cliente", "field_type": "string", "length": "120", "scale": "", "required": true, "primary_key": false, "default_value": "", "notes": ""},
+    {"name": "active", "description": "Cliente ativo", "field_type": "bool", "length": "", "scale": "", "required": false, "primary_key": false, "default_value": "true", "notes": ""}
+  ],
+  "generated_code_path": "generated/tables/erp_customer.mint"
+}

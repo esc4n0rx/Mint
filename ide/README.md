@@ -1,75 +1,84 @@
-# Mint IDE (PyQt5)
+# Mint ERP Studio (PyQt5)
 
-IDE desktop oficial do projeto Mint, com foco em produtividade para desenvolvimento de arquivos `.mint`.
+O diretório `ide/` agora hospeda o **Mint ERP Studio**, um workbench visual inspirado em fluxos de ERP/SAP para modelagem de tabelas, organização de módulos Mint, edição técnica e execução operacional.
 
-## Estrutura
+## Propósito do produto
 
-- `main.py`, `app.py`: bootstrap da aplicação.
-- `core/`: integração com runtime/linter, settings, workspace e arquivos.
-- `ui/`: main window, explorer, tabs, terminal e diálogos.
-- `editor/`: editor Mint customizado, line numbers, auto-indent e syntax highlight.
-- `models/`: modelos de diagnóstico e estado.
-- `utils/`: utilitários auxiliares.
+A aplicação deixou de ser centrada em uma IDE tradicional. O foco atual é:
 
-## Dependências
+- navegação por árvore ERP;
+- modelagem visual de tabelas internas;
+- catálogo técnico de objetos;
+- organização de módulos `.mint` em pastas reutilizáveis;
+- edição de código Mint com syntax highlight preservado;
+- execução de programas com histórico e logs.
 
-```bash
-pip install PyQt5
-```
+## Áreas principais
+
+- **ERP Workbench**: árvore principal com Projeto, Sistema e Ajuda.
+- **Catálogo de tabelas**: lista de definições persistidas em `.mint_workbench/tables/*.json`.
+- **Designer de tabela**: formulário + grid para campos, tipos, PK, default e observações.
+- **Módulos ERP**: árvore de `modules/` com criação de pasta e arquivos `.mint`.
+- **Editor Mint**: editor legado reaproveitado com highlight, lint e diagnósticos em tempo real.
+- **Centro de execução**: execução de programas `.mint`, output estruturado e histórico local.
+
+## Estrutura interna
+
+- `core/`: runtime, lint, workspace, settings e integrações básicas.
+- `services/`: serviços do workbench (`table_service`, `module_service`, `execution_service`, `workbench_service`).
+- `models/`: modelos de tabela e execução.
+- `ui/panels/`: painéis de workbench (tabelas, módulos, execução, ajuda, dashboard).
+- `ui/widgets/`: navegação ERP lateral.
+- `editor/`: editor Mint original reaproveitado e adaptado ao novo visual.
+
+## Persistência local
+
+Ao abrir um workspace, o studio cria/usa:
+
+- `.mint_workbench/tables/` → definições JSON das tabelas;
+- `.mint_workbench/metadata/execution_history.json` → histórico de execuções;
+- `.mint_workbench/logs/` → logs de output;
+- `generated/tables/` → artefatos `.mint` gerados a partir do modelador;
+- `modules/` → módulos organizados para uso futuro com `IMPORT`.
+
+## Exemplos entregues
+
+- tabela exemplo: `erp_customer`;
+- módulos exemplo: `modules/financial/tax_rules.mint`, `modules/inventory/stock_calc.mint`;
+- programa exemplo: `programs/daily_close.mint`.
 
 ## Como executar
 
-No root do repositório:
-
 ```bash
+pip install PyQt5
 python -m ide.main
 ```
 
-## Configuração de runtime/linter
+## Fluxos principais
 
-A IDE utiliza integração nativa com os módulos do próprio Mint:
-- execução via `python -m mintlang.cli -file <arquivo.mint>`
-- lint via `mintlang.module_loader.ModuleLoader` + `mintlang.linter.Linter`
+### 1. Criar tabela
+1. Abra **Projeto → Tabelas**.
+2. Vá para a aba **Designer de tabela**.
+3. Preencha nome, descrição e módulo.
+4. Adicione campos no grid.
+5. Salve e, se desejar, clique em **Gerar Mint**.
 
-Também há campos de configuração para caminhos de runtime/linter no diálogo de configurações para futuras evoluções.
+### 2. Criar módulo
+1. Abra **Projeto → Módulos**.
+2. Crie uma pasta técnica.
+3. Crie um arquivo `.mint` dentro do módulo.
+4. Abra em duplo clique para editar no editor integrado.
 
-## Funcionalidades implementadas
+### 3. Executar programa
+1. Abra o arquivo `.mint` no editor ou informe o caminho no **Centro de execução**.
+2. Informe parâmetros textuais, se necessário para documentação operacional.
+3. Clique em **Executar**.
+4. Consulte output, histórico e logs.
 
-- Workspace com explorer de arquivos e ações de criação/renomeação/exclusão.
-- Editor com abas múltiplas, line numbers, highlight de linha atual, auto-indent e sintaxe Mint.
-- Highlight atualizado para comandos MintDB Beta 2 (`DB COMPACT`, `SHOW TABLES`, `DESCRIBE`, `INDEX CREATE`, `SELECT COUNT(*)`, além dos comandos Beta 1).
-- Fluxos de abrir/salvar/salvar como/salvar todos.
-- Execução do arquivo atual com output assíncrono.
-- Lint do arquivo atual com painel de problemas e navegação por clique.
-- Terminal integrado com execução de comandos shell.
-- Status bar com arquivo atual, cursor e workspace.
-- Atalhos principais (`Ctrl+N`, `Ctrl+O`, `Ctrl+Shift+O`, `Ctrl+S`, `Ctrl+Shift+S`, `F5`, `F8`).
-- Settings persistentes via `QSettings`.
-- Explorer otimizado para workspaces grandes (apenas coluna de nome, menor custo de render e root path consistente).
-- Abertura de arquivo evita recarregar conteúdo quando o arquivo já está aberto em aba.
-- Correção no menu de contexto: criar novo arquivo/pasta agora respeita corretamente a pasta selecionada.
+## Próximos passos recomendados
 
-
-## Próximos passos sugeridos
-
-- autocomplete e navegação semântica;
-- parser incremental para diagnósticos em tempo real;
-- painel de busca global e replace;
-- restaurar sessão completa de abas e posição de cursor;
-- temas avançados e customização visual.
-
-## Novidades (2026-03-11)
-
-- Tema dark padrão com `ThemeManager` e stylesheet central em `assets/themes/dark.qss`.
-- Validação de sintaxe em tempo real com debounce + thread, sugestões de typo e integração com parser/linter.
-- Destaque visual de diagnósticos no editor (sublinhado ondulado + tooltip).
-- Painel de problemas ampliado com coluna de sugestão e navegação por linha/coluna.
-- Área educativa **Aprender Mint** com tópicos, explicações e botão para inserir exemplo no editor.
-
-
-## Novidades (2026-03-12)
-
-- IDE atualizada para suportar fluxos MintDB Beta 2 no syntax highlight e no guia **Aprender Mint**.
-- Snippet educacional atualizado com `INDEX CREATE`, `SHOW TABLES`, `DESCRIBE`, `SELECT COUNT(*)` e `DB COMPACT`.
-- Correções de performance no explorer e abertura de arquivos em projetos grandes.
-- Correção de UX: criação por clique direito respeitando a pasta alvo selecionada.
+- execução real de funções específicas com wrapper automático;
+- visualizador de estruturas MintDB e dados reais de tabela;
+- relacionamento entre tabelas, índices e constraints;
+- restore de sessão de abas abertas;
+- inspeção semântica por módulo/objeto ERP.

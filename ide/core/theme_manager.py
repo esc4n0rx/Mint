@@ -9,9 +9,10 @@ from ide.core.constants import DEFAULT_THEME
 
 class ThemeManager:
     def __init__(self, assets_dir: Path | None = None) -> None:
-        self.assets_dir = assets_dir or Path(__file__).resolve().parents[1] / "assets" / "themes"
+        self.assets_dir = assets_dir or Path(__file__).resolve().parents[1] / 'assets' / 'themes'
         self._themes = {
-            "dark": self.assets_dir / "dark.qss",
+            'light': self.assets_dir / 'light.qss',
+            'dark': self.assets_dir / 'dark.qss',
         }
 
     def available_themes(self) -> list[str]:
@@ -20,5 +21,5 @@ class ThemeManager:
     def apply(self, app: QApplication, theme_name: str | None = None) -> str:
         selected = theme_name or DEFAULT_THEME
         qss_path = self._themes.get(selected, self._themes[DEFAULT_THEME])
-        app.setStyleSheet(qss_path.read_text(encoding="utf-8"))
+        app.setStyleSheet(qss_path.read_text(encoding='utf-8'))
         return selected
