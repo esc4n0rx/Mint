@@ -3,7 +3,7 @@
 " Operações CRUD sobre a coleção em memória table<Client>.
 " Demonstra: FOR, INSERT, IF/ELSE, RETURN, table<T>.
 " NOTA: QUERY com variável externa não é permitido no WHERE
-"       (apenas literais e campos da struct). Por isso,
+"       (at). Por isso,penas literais e campos da struc
 "       filtragens por parâmetro usam FOR + IF.
 " ============================================================
 
@@ -38,7 +38,7 @@ FUNC updateBalance(clients type table<Client>, targetId type int, newBal type fl
   var updated type table<Client>.
   for c in clients.
     if c.id == targetId.
-      c.balance = newBal.
+      MOVE c.balance TO newBal.
     endif.
     insert(updated, c).
   endfor.
