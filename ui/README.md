@@ -40,3 +40,17 @@ python ui/clipper_ide.py
 - `lint/compile`: usa `ModuleLoader` + `Linter`.
 
 Sem subprocess para execução da linguagem: a execução ocorre diretamente no runtime do Mint.
+
+Alternativas úteis:
+
+```bash
+# executando da raiz do projeto
+python -m ui.clipper_ide
+
+# executando por caminho absoluto (o script ajusta o sys.path automaticamente)
+python C:/Users/paulo/Mint/ui/clipper_ide.py
+```
+
+## Erro comum
+
+Se aparecer `ModuleNotFoundError: No module named 'mintlang'`, atualize para esta versão do arquivo `ui/clipper_ide.py` (ela injeta a raiz do repositório no `sys.path` automaticamente).
