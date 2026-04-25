@@ -125,7 +125,7 @@ endprogram.
 ## IDE e tooling
 
 - **Presente no repositório**: extensão VS Code (`vscode-mint`) para highlight.
-- **Não encontrado no estado atual**: pasta `ide/` citada em documentos históricos.
+- **Disponível**: pasta `ui/` com IDE PyQt5 em estilo Clipper (`python ui/clipper_ide.py`).
 
 ## Roadmap técnico sugerido
 
